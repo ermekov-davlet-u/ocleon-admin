@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 export const materialsApi = createApi({
   reducerPath: 'materialsApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'http://localhost:5000/' }),
+  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com/' }),
   tagTypes: ['Materials'],
   endpoints: (builder) => ({
     getMaterials: builder.query({

@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 // базовый URL
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'https://ocleon-back.onrender.com';
 
 export const cuttingApi = createApi({
   reducerPath: 'cuttingApi',

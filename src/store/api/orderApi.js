@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 export const orderApi = createApi({
   reducerPath: 'orderApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'http://localhost:5000/' }), // замени на свой URL
+  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com/' }), // замени на свой URL
   tagTypes: ['CuttingOrder'],
   endpoints: (builder) => ({
     getOrders: builder.query({

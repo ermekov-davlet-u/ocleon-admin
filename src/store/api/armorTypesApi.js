@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 export const armorTypesApi = createApi({
   reducerPath: "armorTypesApi",
-  baseQuery: fetchBaseQuery({ baseUrl: "http://localhost:5000/" }),
+  baseQuery: fetchBaseQuery({ baseUrl: "https://ocleon-back.onrender.com/" }),
   tagTypes: ["ArmorType"],
   endpoints: (builder) => ({
     getArmorTypes: builder.query({

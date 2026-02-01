@@ -115,7 +115,7 @@ export default function CuttingOrders() {
       key: "file",
       render: (filePath) =>
         filePath ? (
-          <a href={`http://localhost:5000/${filePath}`} target="_blank" rel="noopener noreferrer">
+          <a href={`https://ocleon-back.onrender.com//${filePath}`} target="_blank" rel="noopener noreferrer">
             Скачать
           </a>
         ) : (
@@ -224,7 +224,7 @@ export default function CuttingOrders() {
               <strong>Файл резки:</strong>
             </p>
             <a
-              href={`http://localhost:5000/${previewData.filePath}`}
+              href={`https://ocleon-back.onrender.com//${previewData.filePath}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -233,7 +233,7 @@ export default function CuttingOrders() {
 
             {previewData.filePath.endsWith(".pdf") && (
               <iframe
-                src={`http://localhost:5000/${previewData.filePath}`}
+                src={`https://ocleon-back.onrender.com//${previewData.filePath}`}
                 style={{ width: "100%", height: 400, border: "1px solid #ddd", marginTop: 12 }}
                 title="PDF preview"
               />
@@ -241,7 +241,7 @@ export default function CuttingOrders() {
 
             {previewData.filePath.endsWith(".svg") && (
               <img
-                src={`http://localhost:5000/${previewData.filePath}`}
+                src={`https://ocleon-back.onrender.com//${previewData.filePath}`}
                 alt="SVG preview"
                 style={{ width: "100%", marginTop: 12 }}
               />

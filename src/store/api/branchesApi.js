@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 export const branchesApi = createApi({
   reducerPath: 'branchesApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'http://localhost:5000' }),
+  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com' }),
   tagTypes: ['Branch'],
   endpoints: (builder) => ({
     getBranches: builder.query({

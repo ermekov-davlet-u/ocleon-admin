@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 export const clientsApi = createApi({
   reducerPath: 'clientsApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'http://localhost:5000' }),
+  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com' }),
   tagTypes: ['Client'],
   endpoints: (builder) => ({
     getClients: builder.query({

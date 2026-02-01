@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 export const cuttingJobApi = createApi({
   reducerPath: "cuttingJobApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:5000", // поменяй на свой бэкенд
+    baseUrl: "https://ocleon-back.onrender.com", // поменяй на свой бэкенд
   }),
   tagTypes: ["CuttingJob"],
   endpoints: (builder) => ({
