@@ -1,114 +1,111 @@
 import React, { useState } from "react";
-import { Table, Button, Modal, Input, Select, message, Space, InputNumber, Switch } from "antd";
+import {
+  Table,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Upload,
+  message,
+  Space,
+} from "antd";
+import { UploadOutlined } from "@ant-design/icons";
+import {
+  useGetCuttingJobsQuery,
+  useCreateCuttingJobMutation,
+  useUpdateCuttingJobMutation,
+  useDeleteCuttingJobMutation,
+} from "../store/api/cuttingJobApi";
+import { useGetMaterialsQuery } from "../store/api/materialsApi";
+import { useGetArmorTypesQuery } from "../store/api/armorTypesApi";
+import { useGetDeviceTypesQuery } from "../store/api/deviceTypeApi";
 
 const { Option } = Select;
 
-export default function Products() {
-  // Пример данных для типов и материалов
-  const types = ["Пленка", "Баннер", "Самоклейка"];
-  const materials = ["Матовая", "Глянцевая", "Прозрачная"];
+export default function CuttingJobPage() {
+  const { data: jobs, isLoading } = useGetCuttingJobsQuery();
+  const { data: materials } = useGetMaterialsQuery();
+  const { data: cuttingTypes } = useGetArmorTypesQuery();
+  const { data: deviceTypes } = useGetDeviceTypesQuery();
 
-  const [dataSource, setDataSource] = useState([
-    {
-      key: "1",
-      name: "Броня матовая",
-      type: "Пленка",
-      material: "Матовая",
-      device: "Смартфон",
-      availability: true,
-      price: 500,
-      description: "Матовая защитная пленка для смартфонов",
-    },
-    {
-      key: "2",
-      name: "Броня глянцевая",
-      type: "Баннер",
-      material: "Глянцевая",
-      device: "Планшет",
-      availability: true,
-      price: 700,
-      description: "Глянцевая пленка для планшетов",
-    },
-  ]);
+  const [createJob, { isLoading: creating }] = useCreateCuttingJobMutation();
+  const [updateJob, { isLoading: updating }] = useUpdateCuttingJobMutation();
+  const [deleteJob] = useDeleteCuttingJobMutation();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState(null);
+  const [editingJob, setEditingJob] = useState(null);
+  const [form] = Form.useForm();
 
-  // Поля редактирования
-  const [editingName, setEditingName] = useState("");
-  const [editingType, setEditingType] = useState(types[0]);
-  const [editingMaterial, setEditingMaterial] = useState(materials[0]);
-  const [editingDevice, setEditingDevice] = useState("Смартфон");
-  const [editingAvailability, setEditingAvailability] = useState(true);
-  const [editingPrice, setEditingPrice] = useState(0);
-  const [editingDescription, setEditingDescription] = useState("");
-
-  const handleEdit = (record) => {
-    setEditingRecord(record);
-    setEditingName(record.name);
-    setEditingType(record.type);
-    setEditingMaterial(record.material);
-    setEditingDevice(record.device);
-    setEditingAvailability(record.availability);
-    setEditingPrice(record.price);
-    setEditingDescription(record.description);
-    setIsModalOpen(true);
+  const openEditModal = (job) => {
+    setEditingJob(job);
+    form.setFieldsValue({
+      materialId: job.material?.id,
+      cuttingTypeId: job.armorType?.id,
+      deviceTypeId: job.deviceType?.id,
+      quantity: job.quantity,
+      notes: job.notes,
+      file: null,
+    });
   };
 
-  const handleConfirm = () => {
-    setDataSource((prev) =>
-      prev.map((item) =>
-        item.key === editingRecord.key
-          ? {
-              ...item,
-              name: editingName,
-              type: editingType,
-              material: editingMaterial,
-              device: editingDevice,
-              availability: editingAvailability,
-              price: editingPrice,
-              description: editingDescription,
-            }
-          : item
-      )
-    );
-    message.success("Товар обновлён!");
-    setIsModalOpen(false);
-    setEditingRecord(null);
+  const resetForm = () => {
+    setEditingJob(null);
+    form.resetFields();
   };
 
-  const handleDelete = (key) => {
-    setDataSource((prev) => prev.filter((item) => item.key !== key));
-    message.success("Товар удалён!");
+  const onFinish = async (values) => {
+    try {
+      const formData = new FormData();
+      for (const key in values) {
+        if (key === "file" && values.file?.length > 0) {
+          formData.append("file", values.file[0].originFileObj);
+        } else {
+          formData.append(key, values[key]);
+        }
+      }
+
+      if (editingJob) {
+        await updateJob({ id: editingJob.id, data: formData }).unwrap();
+        message.success("Cutting Job обновлен!");
+      } else {
+        await createJob(formData).unwrap();
+        message.success("Cutting Job создан!");
+      }
+      resetForm();
+    } catch (err) {
+      message.error("Ошибка при сохранении");
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteJob(id).unwrap();
+      message.success("Cutting Job удален");
+    } catch (err) {
+      message.error("Ошибка при удалении");
+      console.error(err);
+    }
   };
 
   const columns = [
-    { title: "ID", dataIndex: "key", key: "key", width: 60 },
-    { title: "Название", dataIndex: "name", key: "name" },
-    { title: "Тип", dataIndex: "type", key: "type" },
-    { title: "Материал", dataIndex: "material", key: "material" },
-    { title: "Устройство", dataIndex: "device", key: "device" },
-    {
-      title: "Наличие",
-      dataIndex: "availability",
-      key: "availability",
-      render: (available) => (available ? "Да" : "Нет"),
-    },
-    {
-      title: "Цена",
-      dataIndex: "price",
-      key: "price",
-      render: (price) => `${price} сом`,
-    },
-    { title: "Описание", dataIndex: "description", key: "description" },
+    { title: "ID", dataIndex: "id", key: "id", width: 50 },
+    { title: "Материал", dataIndex: ["material", "name"], key: "material", width: 120 },
+    { title: "Тип резки", dataIndex: ["armorType", "name"], key: "armorType", width: 120 },
+    { title: "Устройство", dataIndex: ["deviceType", "name"], key: "deviceType", width: 120 },
+    { title: "Кол-во", dataIndex: "quantity", key: "quantity", width: 70 },
+    { title: "Примечание", dataIndex: "notes", key: "notes", ellipsis: true },
     {
       title: "Действия",
-      key: "action",
+      key: "actions",
+      width: 140,
       render: (_, record) => (
-        <Space>
-          <Button onClick={() => handleEdit(record)}>Редактировать</Button>
-          <Button danger onClick={() => handleDelete(record.key)}>
-            Удалить
+        <Space size="small">
+          <Button type="link" onClick={() => openEditModal(record)}>
+            Ред.
+          </Button>
+          <Button type="link" danger onClick={() => handleDelete(record.id)}>
+            Уд.
           </Button>
         </Space>
       ),
@@ -116,75 +113,107 @@ export default function Products() {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Виды броне-оклейки</h2>
-      <Table dataSource={dataSource} columns={columns} pagination={false} bordered />
-
-      <Modal
-        title="Редактировать товар"
-        open={isModalOpen}
-        onOk={handleConfirm}
-        onCancel={() => setIsModalOpen(false)}
-        okText="Сохранить"
-        cancelText="Отмена"
+    <div style={{ margin: "20px auto" }}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={onFinish}
+        initialValues={{ quantity: 1 }}
+        style={{ padding: 10, border: "1px solid #f0f0f0", borderRadius: 6 }}
       >
-        <Input
-          placeholder="Название"
-          value={editingName}
-          onChange={(e) => setEditingName(e.target.value)}
-          style={{ marginBottom: 12 }}
-        />
-        <Select
-          value={editingType}
-          onChange={(value) => setEditingType(value)}
-          style={{ width: "100%", marginBottom: 12 }}
-        >
-          {types.map((t) => (
-            <Option key={t} value={t}>
-              {t}
-            </Option>
-          ))}
-        </Select>
-        <Select
-          value={editingMaterial}
-          onChange={(value) => setEditingMaterial(value)}
-          style={{ width: "100%", marginBottom: 12 }}
-        >
-          {materials.map((m) => (
-            <Option key={m} value={m}>
-              {m}
-            </Option>
-          ))}
-        </Select>
-        <Select
-          value={editingDevice}
-          onChange={(value) => setEditingDevice(value)}
-          style={{ width: "100%", marginBottom: 12 }}
-        >
-          <Option value="Смартфон">Смартфон</Option>
-          <Option value="Планшет">Планшет</Option>
-          <Option value="Ноутбук">Ноутбук</Option>
-        </Select>
-        <div style={{ marginBottom: 12 }}>
-          <span>Наличие: </span>
-          <Switch
-            checked={editingAvailability}
-            onChange={(checked) => setEditingAvailability(checked)}
-          />
-        </div>
-        <InputNumber
-          style={{ width: "100%", marginBottom: 12 }}
-          placeholder="Цена"
-          value={editingPrice}
-          onChange={(value) => setEditingPrice(value)}
-        />
-        <Input.TextArea
-          placeholder="Описание"
-          value={editingDescription}
-          onChange={(e) => setEditingDescription(e.target.value)}
-          rows={3}
-        />
-      </Modal>
+        <Space align="top" wrap size="small" style={{ }}>
+          <Form.Item
+            label="Материал"
+            name="materialId"
+            rules={[{ required: true, message: "Выберите материал" }]}
+          >
+            <Select placeholder="Выберите материал" size="middle">
+              {materials?.map((m) => (
+                <Option key={m.id} value={m.id}>
+                  {m.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="Тип резки"
+            name="cuttingTypeId"
+            rules={[{ required: true, message: "Выберите тип резки" }]}
+          >
+            <Select placeholder="Выберите тип резки" size="middle">
+              {cuttingTypes?.map((c) => (
+                <Option key={c.id} value={c.id}>
+                  {c.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="Устройство"
+            name="deviceTypeId"
+            rules={[{ required: true, message: "Выберите устройство" }]}
+          >
+            <Select placeholder="Выберите устройство" size="middle">
+              {deviceTypes?.map((d) => (
+                <Option key={d.id} value={d.id}>
+                  {d.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="Файл"
+            name="file"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload beforeUpload={() => false} maxCount={1}>
+              <Button icon={<UploadOutlined />}>
+                {editingJob ? "Заменить файл" : "Загрузить файл"}
+              </Button>
+            </Upload>
+          </Form.Item>
+
+          <Form.Item label="Примечание" name="notes">
+            <Input.TextArea rows={2} placeholder="Введите примечание" />
+          </Form.Item>
+
+          <Form.Item
+            label="Количество"
+            name="quantity"
+            rules={[{ type: "number", min: 1, message: "Минимум 1" }]}
+          >
+            <InputNumber min={1} style={{ width: "100%" }} />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={creating || updating}
+              >
+                {editingJob ? "Сохранить" : "Создать"}
+              </Button>
+              {editingJob && <Button onClick={resetForm}>Отмена</Button>}
+            </Space>
+          </Form.Item>
+        </Space>
+      </Form>
+
+      <Table
+        rowKey="id"
+        dataSource={jobs}
+        columns={columns}
+        loading={isLoading}
+        style={{ marginTop: 20 }}
+        scroll={{ x: 800 }}
+        size="middle"
+        bordered
+      />
     </div>
   );
 }
