@@ -61,7 +61,7 @@ function App() {
 
       <Layout>
         {/* <Header style={{ padding: 0, background: "#fff" }} /> */}
-        <div style={{overflow: "auto"}}>
+        <div style={{ overflow: "auto" }}>
 
           <Content style={{ margin: 16 }}>
             {page === "dashboard" && <Dashboard />}
