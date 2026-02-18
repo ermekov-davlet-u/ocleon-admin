@@ -1,8 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { mainURL } from '../../config';
 
 export const deviceTypeApi = createApi({
   reducerPath: 'deviceTypeApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com' }),
+  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
   tagTypes: ['DeviceType'],
   endpoints: (builder) => ({
     getDeviceTypes: builder.query({

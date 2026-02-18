@@ -1,4 +1,4 @@
-import { Layout, Menu } from "antd";
+import { Layout, Menu, Button } from "antd";
 import {
   DashboardOutlined,
   UserOutlined,
@@ -9,8 +9,10 @@ import {
   BankOutlined,
   TagsOutlined,
   SkinOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 import { useState } from "react";
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
@@ -21,63 +23,112 @@ import Employees from "./pages/Employee";
 import Branches from "./pages/Filials";
 import Types from "./pages/Types";
 import Products from "./pages/Product";
-import LoginPage from "./pages/Login"; // 👈 страница логина
+import LoginPage from "./pages/Login";
 import DeviceTypeTable from "./pages/DeviceTypeTable";
+import IncomingInvoiceForm from "./pages/IncomingInvoiceForm";
+import PhoneCasePreview from "./pages/PreviewPage";
 
 const { Header, Content, Footer, Sider } = Layout;
 
 function App() {
   const [collapsed, setCollapsed] = useState(false);
-  const [page, setPage] = useState("dashboard");
-  const [isAuth, setIsAuth] = useState(false); // 👈 авторизация
+  const [mobile, setMobile] = useState(false);
+  const [isAuth, setIsAuth] = useState(!!localStorage.getItem("token"));
 
-  if (isAuth) {
-    return <LoginPage onSuccess={() => setIsAuth(true)} />;
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  if (!isAuth) {
+    return (
+      <LoginPage
+        onSuccess={(token) => {
+          localStorage.setItem("token", token);
+          setIsAuth(true);
+          navigate("/dashboard");
+        }}
+      />
+    );
   }
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed}>
-        <div style={{ height: 32, margin: 16, background: "rgba(255,255,255,0.2)" }} />
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        breakpoint="lg"
+        collapsedWidth={mobile ? 0 : 80}
+        onBreakpoint={(broken) => {
+          setMobile(broken);
+          setCollapsed(broken);
+        }}
+        style={mobile ? { position: "fixed", zIndex: 1000, height: "100vh" } : {}}
+      >
+        <div style={{ height: 32 }} />
         <Menu
           theme="dark"
-          selectedKeys={[page]}
+          selectedKeys={[location.pathname]}
           mode="inline"
-          onClick={(e) => setPage(e.key)}
+          onClick={(e) => {
+            navigate(e.key);
+            if (mobile) setCollapsed(true);
+          }}
           items={[
-            { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
-            { key: "users", icon: <UserOutlined />, label: "Clients" },
-            { key: "materials", icon: <AppstoreOutlined />, label: "Materials" },
-            { key: "invoices", icon: <FileTextOutlined />, label: "Invoices" },
-            { key: "cutting", icon: <ScissorOutlined />, label: "Cutting" },
-            { key: "employee", icon: <TeamOutlined />, label: "Employees" },
-            { key: "branches", icon: <BankOutlined />, label: "Branches" },
-            { key: "types", icon: <TagsOutlined />, label: "Types" },
-            { key: "products", icon: <SkinOutlined />, label: "Products" },
-            { key: "devices", icon: <SkinOutlined />, label: "Device Type" },
+            { key: "/dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
+            { key: "/users", icon: <UserOutlined />, label: "Клиенты" },
+            { key: "/materials", icon: <AppstoreOutlined />, label: "Материалы" },
+            { key: "/invoices", icon: <FileTextOutlined />, label: "Накладная" },
+            { key: "/invoiceForm", icon: <FileTextOutlined />, label: "Приход товара" },
+            { key: "/cutting", icon: <ScissorOutlined />, label: "Резка" },
+            { key: "/employee", icon: <TeamOutlined />, label: "Работники" },
+            { key: "/branches", icon: <BankOutlined />, label: "Филиалы" },
+            { key: "/types", icon: <TagsOutlined />, label: "Вид резки" },
+            { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
+            { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
+            { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотре" },
           ]}
         />
       </Sider>
 
-      <Layout>
-        {/* <Header style={{ padding: 0, background: "#fff" }} /> */}
-        <div style={{overflow: "auto"}}>
+      <Layout style={{ marginLeft: mobile ? 0 : collapsed ? 0 : 0 }}>
+        {/* <Header
+          style={{
+            background: "#fff",
+            padding: "0 16px",
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {mobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+            />
+          )}
+        </Header> */}
 
-          <Content style={{ margin: 16 }}>
-            {page === "dashboard" && <Dashboard />}
-            {page === "users" && <Users />}
-            {page === "materials" && <Materials />}
-            {page === "invoices" && <IncomingInvoices />}
-            {page === "cutting" && <CuttingFiles />}
-            {page === "employee" && <Employees />}
-            {page === "branches" && <Branches />}
-            {page === "types" && <Types />}
-            {page === "products" && <Products />}
-            {page === "devices" && <DeviceTypeTable />}
-          </Content>
-        </div>
+        <Content style={{ maxWidth: "calc(100vw - 24px)" }}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/materials" element={<Materials />} />
+            <Route path="/invoices" element={<IncomingInvoices />} />
+            <Route path="/cutting" element={<CuttingFiles />} />
+            <Route path="/employee" element={<Employees />} />
+            <Route path="/branches" element={<Branches />} />
+            <Route path="/types" element={<Types />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/devices" element={<DeviceTypeTable />} />
+            <Route path="/invoiceForm" element={<IncomingInvoiceForm />} />
+            <Route path="/preview" element={<PhoneCasePreview />} />
+          </Routes>
+        </Content>
 
-        <Footer style={{ textAlign: "center" }}>Admin ©2026</Footer>
+        <Footer style={{ textAlign: "center" }}>
+          Admin ©2026
+        </Footer>
       </Layout>
     </Layout>
   );

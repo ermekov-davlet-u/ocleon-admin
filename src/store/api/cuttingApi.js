@@ -1,11 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-
-// базовый URL
-const BASE_URL = 'https://ocleon-back.onrender.com';
+import { mainURL } from '../../config';
 
 export const cuttingApi = createApi({
   reducerPath: 'cuttingApi',
-  baseQuery: fetchBaseQuery({ baseUrl: BASE_URL }),
+  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
   tagTypes: ['CuttingJob', 'Material', 'DeviceType', 'CuttingType', 'User'],
   endpoints: (builder) => ({
     // ---------- Cutting Jobs ----------

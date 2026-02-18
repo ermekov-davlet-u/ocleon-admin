@@ -1,0 +1,1 @@
+export const mainURL = "http://localhost:5000/"

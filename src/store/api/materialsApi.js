@@ -1,9 +1,10 @@
 // store/materialsApi.js
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { mainURL } from '../../config';
 
 export const materialsApi = createApi({
   reducerPath: 'materialsApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'https://ocleon-back.onrender.com/' }),
+  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
   tagTypes: ['Materials'],
   endpoints: (builder) => ({
     getMaterials: builder.query({

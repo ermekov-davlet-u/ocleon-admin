@@ -1,36 +1,47 @@
-import React, { useState, useRef } from "react";
-import { Table, Button, InputNumber, Select, Modal, message, Popconfirm } from "antd";
+import { useState, useRef } from "react";
 import {
-  useGetCuttingJobsQuery,
-  useCreateCuttingJobMutation,
-  usePreviewCuttingJobMutation,
-} from "../store/api/cuttingJobApi";
-import { useGetMaterialsQuery } from "../store/api/materialsApi";
+  Table,
+  Button,
+  InputNumber,
+  Select,
+  Modal,
+  message,
+  Popconfirm,
+  Input,
+  Row,
+  Col,
+} from "antd";
+
+import {
+  useGetOrdersQuery,
+  useCreateOrderMutation,
+  useChangeOrderStatusMutation,
+} from "../store/api/orderApi";
 import { useGetArmorTypesQuery } from "../store/api/armorTypesApi";
-import { useGetDeviceTypesQuery } from "../store/api/deviceTypeApi";
-import { useChangeOrderStatusMutation, useCreateOrderMutation, useGetOrdersQuery } from "../store/api/orderApi"; // <- мутация для изменения статуса
+import { useGetDeviceTypesQuery, useGetMaterialsQuery } from "../store/api/cuttingApi";
 
 const { Option } = Select;
 
 export default function CuttingOrders() {
-  // Справочники
+  // --- Справочники ---
   const { data: materials = [] } = useGetMaterialsQuery();
   const { data: armorTypes = [] } = useGetArmorTypesQuery();
   const { data: deviceTypes = [] } = useGetDeviceTypesQuery();
 
-  // Резки
+  // --- Резки ---
   const { data: cuttingJobs = [], isLoading } = useGetOrdersQuery();
   const [createCuttingJob] = useCreateOrderMutation();
-  const [previewCuttingJob, { data: previewData, isLoading: isPreviewLoading }] =
-    usePreviewCuttingJobMutation();
   const [changeOrderStatus] = useChangeOrderStatusMutation();
 
-  // Локальное состояние формы
+  // --- Локальное состояние ---
   const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [selectedArmor, setSelectedArmor] = useState(null);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDelayRunning, setIsDelayRunning] = useState(false);
@@ -38,30 +49,21 @@ export default function CuttingOrders() {
 
   // --- Создание резки с задержкой ---
   const handleCreateClick = async () => {
-    if (!selectedMaterial || !selectedArmor || !selectedDevice) {
-      return message.error("Выберите все справочники!");
+    if (
+      !selectedMaterial ||
+      !selectedArmor ||
+      !selectedDevice ||
+      !clientPhone
+    ) {
+      return message.error("Заполните все обязательные поля!");
     }
 
-    try {
-      const res = await previewCuttingJob({
-        materialId: selectedMaterial.id,
-        cuttingTypeId: selectedArmor.id,
-        deviceTypeId: selectedDevice.id,
-      }).unwrap();
-
-      if (!res) return message.warning("Для выбранной комбинации нет файла резки");
-
-      // Запуск задержки 5 секунд с возможностью отмены
-      setIsDelayRunning(true);
-      delayTimeout.current = setTimeout(() => {
-        setIsModalOpen(true);
-        setIsDelayRunning(false);
-      }, 5000);
-      message.info("Создание резки через 5 секунд. Можно отменить.");
-    } catch (e) {
-      console.error(e);
-      message.error("Ошибка получения резки");
-    }
+    setIsDelayRunning(true);
+    delayTimeout.current = setTimeout(() => {
+      setIsModalOpen(true);
+      setIsDelayRunning(false);
+    }, 3000); // 3 сек задержка
+    message.info("Создание резки через 3 секунды. Можно отменить.");
   };
 
   const cancelDelay = () => {
@@ -72,7 +74,6 @@ export default function CuttingOrders() {
     }
   };
 
-  // --- Подтверждение создания резки ---
   const handleConfirm = async () => {
     try {
       await createCuttingJob({
@@ -81,19 +82,24 @@ export default function CuttingOrders() {
         deviceTypeId: selectedDevice.id,
         quantity,
         notes,
+        clientName,
+        clientPhone,
+        clientEmail,
       }).unwrap();
 
       message.success("Резка создана!");
       setIsModalOpen(false);
       setQuantity(1);
       setNotes("");
+      setClientName("");
+      setClientPhone("");
+      setClientEmail("");
     } catch (err) {
       console.error(err);
       message.error("Ошибка создания резки");
     }
   };
 
-  // --- Изменение статуса резки ---
   const handleStatusChange = async (jobId, newStatus) => {
     try {
       await changeOrderStatus({ id: jobId, status: newStatus }).unwrap();
@@ -105,105 +111,154 @@ export default function CuttingOrders() {
   };
 
   const columns = [
-    { title: "Материал", dataIndex: ["material", "name"], key: "material" },
-    { title: "Тип резки", dataIndex: ["armorType", "name"], key: "armorType" },
-    { title: "Устройство", dataIndex: ["deviceType", "name"], key: "deviceType" },
-    { title: "Кол-во", dataIndex: "quantity", key: "quantity" },
-    {
-      title: "Файл",
-      dataIndex: "filePath",
-      key: "file",
-      render: (filePath) =>
-        filePath ? (
-          <a href={`https://ocleon-back.onrender.com//${filePath}`} target="_blank" rel="noopener noreferrer">
-            Скачать
-          </a>
-        ) : (
-          "Нет файла"
-        ),
-    },
-    {
-      title: "Статус",
-      dataIndex: "status",
-      key: "status",
-    },
-    {
-      title: "Действия",
-      key: "actions",
-      render: (_, record) => (
-        <Popconfirm
-          title="Вы уверены, что хотите провести/завершить резку?"
-          onConfirm={() => handleStatusChange(record.id, "Выполнено")}
-          okText="Да"
-          cancelText="Нет"
-        >
-          <Button type="primary" disabled={record.status === "Выполнено"}>
-            Провести
-          </Button>
-        </Popconfirm>
-      ),
-    },
-  ];
+  {
+    title: "Материал",
+    dataIndex: ["cuttingJob", "material", "name"],
+    key: "material",
+  },
+  {
+    title: "Тип резки",
+    dataIndex: ["cuttingJob", "armorType", "name"],
+    key: "armorType",
+  },
+  {
+    title: "Устройство",
+    dataIndex: ["cuttingJob", "deviceType", "name"],
+    key: "deviceType",
+  },
+  { title: "Кол-во", dataIndex: "quantity", key: "quantity" },
+  { title: "Статус", dataIndex: "status", key: "status" },
+  {
+    title: "Действия",
+    key: "actions",
+    render: (_, record) => (
+      <Popconfirm
+        title="Вы уверены, что хотите провести/завершить резку?"
+        onConfirm={() => handleStatusChange(record.id, "DONE")}
+        okText="Да"
+        cancelText="Нет"
+      >
+        <Button type="primary" disabled={record.status === "DONE"}>
+          Провести
+        </Button>
+      </Popconfirm>
+    ),
+  },
+];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <h2>Создать резку</h2>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-        <Select
-          placeholder="Выберите материал"
-          style={{ width: 200 }}
-          value={selectedMaterial?.id}
-          onChange={(id) => setSelectedMaterial(materials.find((m) => m.id === id))}
-        >
-          {materials.map((m) => (
-            <Option key={m.id} value={m.id}>
-              {m.name}
-            </Option>
-          ))}
-        </Select>
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} md={6}>
+          <Select
+            placeholder="Материал"
+            style={{ width: "100%" }}
+            value={selectedMaterial?.id}
+            onChange={(id) =>
+              setSelectedMaterial(materials.find((m) => m.id === id))
+            }
+          >
+            {materials.map((m) => (
+              <Option key={m.id} value={m.id}>
+                {m.name}
+              </Option>
+            ))}
+          </Select>
+        </Col>
 
-        <Select
-          placeholder="Выберите тип резки"
-          style={{ width: 200 }}
-          value={selectedArmor?.id}
-          onChange={(id) => setSelectedArmor(armorTypes.find((a) => a.id === id))}
-        >
-          {armorTypes.map((a) => (
-            <Option key={a.id} value={a.id}>
-              {a.name}
-            </Option>
-          ))}
-        </Select>
+        <Col xs={24} sm={12} md={6}>
+          <Select
+            placeholder="Тип резки"
+            style={{ width: "100%" }}
+            value={selectedArmor?.id}
+            onChange={(id) =>
+              setSelectedArmor(armorTypes.find((a) => a.id === id))
+            }
+          >
+            {armorTypes.map((a) => (
+              <Option key={a.id} value={a.id}>
+                {a.name}
+              </Option>
+            ))}
+          </Select>
+        </Col>
 
-        <Select
-          placeholder="Выберите устройство"
-          style={{ width: 200 }}
-          value={selectedDevice?.id}
-          onChange={(id) => setSelectedDevice(deviceTypes.find((d) => d.id === id))}
-        >
-          {deviceTypes.map((d) => (
-            <Option key={d.id} value={d.id}>
-              {d.name}
-            </Option>
-          ))}
-        </Select>
+        <Col xs={24} sm={12} md={6}>
+          <Select
+            placeholder="Устройство"
+            style={{ width: "100%" }}
+            value={selectedDevice?.id}
+            onChange={(id) =>
+              setSelectedDevice(deviceTypes.find((d) => d.id === id))
+            }
+          >
+            {deviceTypes.map((d) => (
+              <Option key={d.id} value={d.id}>
+                {d.name}
+              </Option>
+            ))}
+          </Select>
+        </Col>
 
-        <InputNumber min={1} value={quantity} onChange={setQuantity} placeholder="Кол-во" />
+        <Col xs={24} sm={12} md={3}>
+          <InputNumber
+            min={1}
+            value={quantity}
+            onChange={setQuantity}
+            placeholder="Кол-во"
+            style={{ width: "100%" }}
+          />
+        </Col>
 
-        {isDelayRunning ? (
-          <Button danger onClick={cancelDelay}>
-            Отменить создание
-          </Button>
-        ) : (
-          <Button type="primary" loading={isPreviewLoading} onClick={handleCreateClick}>
-            Создать резку
-          </Button>
-        )}
-      </div>
+        <Col xs={24} sm={12} md={3}>
+          {isDelayRunning ? (
+            <Button danger onClick={cancelDelay} block>
+              Отменить
+            </Button>
+          ) : (
+            <Button type="primary" onClick={handleCreateClick} block>
+              Создать
+            </Button>
+          )}
+        </Col>
+      </Row>
 
-      <h2>Список созданных резок</h2>
-      <Table dataSource={cuttingJobs} columns={columns} rowKey="id" loading={isLoading} bordered />
+      {/* --- Клиент --- */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} md={8}>
+          <Input
+            placeholder="Имя клиента"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+          />
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <Input
+            placeholder="Телефон клиента *"
+            value={clientPhone}
+            onChange={(e) => setClientPhone(e.target.value)}
+          />
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <Input
+            placeholder="Email клиента"
+            value={clientEmail}
+            onChange={(e) => setClientEmail(e.target.value)}
+          />
+        </Col>
+      </Row>
+
+      <h2>Список резок</h2>
+      <Table
+        dataSource={cuttingJobs}
+        columns={columns}
+        rowKey="id"
+        loading={isLoading}
+        bordered
+        scroll={{ x: 600 }}
+      />
 
       <Modal
         title="Подтвердите создание резки"
@@ -214,43 +269,16 @@ export default function CuttingOrders() {
         cancelText="Отмена"
       >
         <p>
-          Создаётся резка: <strong>{selectedMaterial?.name}</strong> / <strong>{selectedArmor?.name}</strong> на
-          устройстве <strong>{selectedDevice?.name}</strong>
+          Создаётся резка: <strong>{selectedMaterial?.name}</strong> /{" "}
+          <strong>{selectedArmor?.name}</strong> на устройстве{" "}
+          <strong>{selectedDevice?.name}</strong>
         </p>
-
-        {previewData?.filePath && (
-          <div style={{ marginTop: 16 }}>
-            <p>
-              <strong>Файл резки:</strong>
-            </p>
-            <a
-              href={`https://ocleon-back.onrender.com//${previewData.filePath}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Открыть в новой вкладке
-            </a>
-
-            {previewData.filePath.endsWith(".pdf") && (
-              <iframe
-                src={`https://ocleon-back.onrender.com//${previewData.filePath}`}
-                style={{ width: "100%", height: 400, border: "1px solid #ddd", marginTop: 12 }}
-                title="PDF preview"
-              />
-            )}
-
-            {previewData.filePath.endsWith(".svg") && (
-              <img
-                src={`https://ocleon-back.onrender.com//${previewData.filePath}`}
-                alt="SVG preview"
-                style={{ width: "100%", marginTop: 12 }}
-              />
-            )}
-          </div>
-        )}
-
         <p>Количество: {quantity}</p>
         {notes && <p>Примечания: {notes}</p>}
+        <p>
+          Клиент: {clientName || "-"} / Телефон: {clientPhone} / Email:{" "}
+          {clientEmail || "-"}
+        </p>
       </Modal>
     </div>
   );

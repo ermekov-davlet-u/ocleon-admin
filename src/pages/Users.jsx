@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Switch, Space, message } from 'antd';
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Switch,
+  Space,
+  message,
+  Grid,
+} from 'antd';
 import {
   useGetClientsQuery,
   useCreateClientMutation,
@@ -7,46 +17,48 @@ import {
   useDeleteClientMutation
 } from '../store/api/clientsApi';
 
+const { useBreakpoint } = Grid;
+
 export default function Clients() {
   const { data: clients, refetch } = useGetClientsQuery();
   const [createClient] = useCreateClientMutation();
   const [updateClient] = useUpdateClientMutation();
   const [deleteClient] = useDeleteClientMutation();
 
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [search, setSearch] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [form] = Form.useForm();
 
-  // Открытие модалки для добавления
   const handleAdd = () => {
     setEditingClient(null);
     form.resetFields();
     setIsModalVisible(true);
   };
 
-  // Редактирование клиента
   const handleEdit = (record) => {
     setEditingClient(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
-  // Удаление
   const handleDelete = async (id) => {
     try {
       await deleteClient(id).unwrap();
       message.success('Клиент удален');
       refetch();
-    } catch (err) {
+    } catch {
       message.error('Ошибка удаления');
     }
   };
 
-  // Сохранение (создание/редактирование)
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+
       if (editingClient) {
         await updateClient({ id: editingClient.id, data: values }).unwrap();
         message.success('Клиент обновлен');
@@ -54,57 +66,92 @@ export default function Clients() {
         await createClient(values).unwrap();
         message.success('Клиент создан');
       }
+
       setIsModalVisible(false);
       refetch();
-    } catch (err) {
+    } catch {
       message.error('Ошибка сохранения');
     }
   };
 
-  // Фильтрация по поиску
   const filteredData = clients?.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.includes(search)
   );
 
-  // Колонки таблицы
   const columns = [
-    { title: 'Имя', dataIndex: 'name', key: 'name' },
-    { 
-      title: 'Телефон', 
-      dataIndex: 'phone', 
-      key: 'phone',
-      render: (phone) => <a href={`tel:${phone}`}>{phone}</a>
+    {
+      title: 'Имя',
+      dataIndex: 'name',
+      key: 'name',
+      ellipsis: true,
     },
-    { title: 'Email', dataIndex: 'email', key: 'email' },
-    { 
-      title: 'Активен', 
-      dataIndex: 'isActive', 
-      key: 'isActive', 
+    {
+      title: 'Телефон',
+      dataIndex: 'phone',
+      key: 'phone',
+      render: (phone) => <a href={`tel:${phone}`}>{phone}</a>,
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+      responsive: ['md'], // скрываем на мобилке
+      ellipsis: true,
+    },
+    {
+      title: 'Активен',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      responsive: ['lg'],
       render: (val) => val ? 'Да' : 'Нет'
     },
     {
       title: 'Действия',
       key: 'actions',
       render: (_, record) => (
-        <Space>
-          <Button type="link" onClick={() => handleEdit(record)}>Редактировать</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>Удалить</Button>
+        <Space direction={isMobile ? 'vertical' : 'horizontal'}>
+          <Button
+            type="link"
+            size={isMobile ? 'small' : 'middle'}
+            onClick={() => handleEdit(record)}
+          >
+            Ред.
+          </Button>
+          <Button
+            type="link"
+            danger
+            size={isMobile ? 'small' : 'middle'}
+            onClick={() => handleDelete(record.id)}
+          >
+            Уд.
+          </Button>
         </Space>
       )
     }
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Space style={{ marginBottom: 16 }}>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
+      <Space
+        direction={isMobile ? 'vertical' : 'horizontal'}
+        style={{ marginBottom: 16, width: '100%' }}
+      >
         <Input.Search
           placeholder="Поиск клиента"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
+          style={{ width: isMobile ? '100%' : 250 }}
         />
-        <Button type="primary" onClick={handleAdd}>Добавить клиента</Button>
+
+        <Button
+          type="primary"
+          onClick={handleAdd}
+          block={isMobile}
+        >
+          Добавить клиента
+        </Button>
       </Space>
 
       <Table
@@ -112,6 +159,12 @@ export default function Clients() {
         dataSource={filteredData}
         rowKey="id"
         bordered
+        scroll={{ x: true }}
+        size={isMobile ? 'small' : 'middle'}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: false
+        }}
       />
 
       <Modal
@@ -120,6 +173,9 @@ export default function Clients() {
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
         okText="Сохранить"
+        width={isMobile ? '100%' : 500}
+        style={isMobile ? { top: 0 } : {}}
+        bodyStyle={isMobile ? { padding: 16 } : {}}
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -142,7 +198,11 @@ export default function Clients() {
             <Input />
           </Form.Item>
 
-          <Form.Item label="Активен" name="isActive" valuePropName="checked">
+          <Form.Item
+            label="Активен"
+            name="isActive"
+            valuePropName="checked"
+          >
             <Switch />
           </Form.Item>
         </Form>

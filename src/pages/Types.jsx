@@ -1,5 +1,23 @@
 import React, { useState } from "react";
-import { Table, Button, Modal, Input, Space, message, Switch } from "antd";
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Space,
+  message,
+  Switch,
+  Popconfirm,
+  Tag,
+  Grid,
+} from "antd";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
+
 import {
   useGetArmorTypesQuery,
   useCreateArmorTypeMutation,
@@ -7,120 +25,194 @@ import {
   useDeleteArmorTypeMutation,
 } from "../store/api/armorTypesApi";
 
+const { useBreakpoint } = Grid;
+
 export default function Types() {
-  const { data, isLoading } = useGetArmorTypesQuery();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
+  const { data = [], isLoading } = useGetArmorTypesQuery();
   const [createArmorType] = useCreateArmorTypeMutation();
   const [updateArmorType] = useUpdateArmorTypeMutation();
   const [deleteArmorType] = useDeleteArmorTypeMutation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [form] = Form.useForm();
 
-  // Открыть модалку (создание / редактирование)
-  const openModal = (record) => {
+  // Открытие модалки
+  const openModal = (record = null) => {
+    setEditingRecord(record);
     if (record) {
-      setEditingRecord(record);
-      setName(record.name);
-      setDescription(record.description || "");
-      setIsActive(record.isActive ?? true);
+      form.setFieldsValue(record);
     } else {
-      setEditingRecord(null);
-      setName("");
-      setDescription("");
-      setIsActive(true);
+      form.resetFields();
+      form.setFieldsValue({ isActive: true });
     }
     setIsModalOpen(true);
   };
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingRecord(null);
+    form.resetFields();
+  };
+
+  // Сохранение данных
   const handleSave = async () => {
     try {
+      const values = await form.validateFields();
+
       if (editingRecord) {
-        await updateArmorType({ id: editingRecord.id, data: { name, description, isActive } }).unwrap();
-        message.success("Запись обновлена");
+        await updateArmorType({
+          id: editingRecord.id,
+          data: values,
+        }).unwrap();
+        message.success("Вид обновлён");
       } else {
-        await createArmorType({ name, description, isActive }).unwrap();
-        message.success("Запись создана");
+        await createArmorType(values).unwrap();
+        message.success("Вид создан");
       }
-      setIsModalOpen(false);
+
+      closeModal();
     } catch (err) {
-      message.error(err?.data?.message || "Ошибка при сохранении");
+      message.error(err?.data?.message || "Ошибка сохранения");
     }
   };
 
+  // Удаление с подтверждением
   const handleDelete = async (id) => {
     try {
       await deleteArmorType(id).unwrap();
-      message.success("Запись удалена");
+      message.success("Вид удалён");
     } catch (err) {
-      message.error(err?.data?.message || "Ошибка при удалении");
+      message.error(err?.data?.message || "Ошибка удаления");
     }
   };
 
+  // Колонки таблицы
   const columns = [
-    { title: "ID", dataIndex: "id", key: "id", width: 60 },
-    { title: "Название вида", dataIndex: "name", key: "name" },
-    { title: "Описание", dataIndex: "description", key: "description" },
     {
-      title: "Активен",
+      title: "Название",
+      dataIndex: "name",
+      key: "name",
+      ellipsis: true,
+    },
+    {
+      title: "Описание",
+      dataIndex: "description",
+      key: "description",
+      ellipsis: true,
+      responsive: ["md"],
+    },
+    {
+      title: "Статус",
       dataIndex: "isActive",
       key: "isActive",
-      render: (val) => (val ? "Да" : "Нет"),
+      render: (val) =>
+        val ? <Tag color="green">Активен</Tag> : <Tag color="red">Неактивен</Tag>,
     },
     {
       title: "Действия",
       key: "action",
+      width: isMobile ? 100 : 160,
       render: (_, record) => (
-        <Space>
-          <Button onClick={() => openModal(record)}>Редактировать</Button>
-          <Button danger onClick={() => handleDelete(record.id)}>
-            Удалить
-          </Button>
+        <Space size="small">
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => openModal(record)}
+            type="text"
+          />
+          <Popconfirm
+            title="Удалить этот вид?"
+            onConfirm={() => handleDelete(record.id)}
+            okText="Да"
+            cancelText="Нет"
+          >
+            <Button danger icon={<DeleteOutlined />} type="text" />
+          </Popconfirm>
         </Space>
       ),
     },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Справочник видов</h2>
-      <Button type="primary" style={{ marginBottom: 16 }} onClick={() => openModal()}>
-        Создать вид
-      </Button>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: isMobile ? "stretch" : "center",
+          flexDirection: isMobile ? "column" : "row",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0 }}>Справочник видов</h2>
+          <div style={{ color: "#888", fontSize: 13 }}>
+            Всего записей: {data.length}
+          </div>
+        </div>
+
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => openModal()}
+          block={isMobile}
+        >
+          Создать вид
+        </Button>
+      </div>
+
+      {/* Таблица */}
       <Table
         dataSource={data}
         columns={columns}
         rowKey="id"
         loading={isLoading}
         bordered
+        pagination={{ pageSize: 8 }}
+        scroll={{ x: true }}
+        size={isMobile ? "small" : "middle"}
       />
 
+      {/* Модалка */}
       <Modal
-        title={editingRecord ? "Редактировать вид" : "Создать вид"}
+        title={editingRecord ? "Редактирование вида" : "Создание вида"}
         open={isModalOpen}
         onOk={handleSave}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={closeModal}
         okText="Сохранить"
         cancelText="Отмена"
+        width={isMobile ? "90%" : 500}
+        centered
       >
-        <Input
-          placeholder="Название вида"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={{ marginBottom: 12 }}
-        />
-        <Input.TextArea
-          placeholder="Описание"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={4}
-          style={{ marginBottom: 12 }}
-        />
-        <div>
-          Активен: <Switch checked={isActive} onChange={setIsActive} />
-        </div>
+        <Form form={form} layout="vertical">
+          <Form.Item
+            label="Название"
+            name="name"
+            rules={[{ required: true, message: "Введите название" }]}
+          >
+            <Input placeholder="Введите название вида" />
+          </Form.Item>
+
+          <Form.Item label="Описание" name="description">
+            <Input.TextArea
+              rows={4}
+              placeholder="Введите описание (необязательно)"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Активен"
+            name="isActive"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
