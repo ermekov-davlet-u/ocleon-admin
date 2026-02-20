@@ -100,6 +100,24 @@ export default function Clients() {
       ellipsis: true,
     },
     {
+      title: 'Дата создания',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      responsive: ['md'], // скрываем на мобилке
+      ellipsis: true,
+      render: (date) => {
+        if (!date) return '-';
+        const d = new Date(date);
+        return d.toLocaleDateString('ru-RU', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+    },
+    {
       title: 'Активен',
       dataIndex: 'isActive',
       key: 'isActive',
@@ -110,7 +128,7 @@ export default function Clients() {
       title: 'Действия',
       key: 'actions',
       render: (_, record) => (
-        <Space direction={isMobile ? 'vertical' : 'horizontal'}>
+        <Space >
           <Button
             type="link"
             size={isMobile ? 'small' : 'middle'}
@@ -134,7 +152,6 @@ export default function Clients() {
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
       <Space
-        direction={isMobile ? 'vertical' : 'horizontal'}
         style={{ marginBottom: 16, width: '100%' }}
       >
         <Input.Search
@@ -160,7 +177,7 @@ export default function Clients() {
         rowKey="id"
         bordered
         scroll={{ x: true }}
-        size={isMobile ? 'small' : 'middle'}
+        size={'small'}
         pagination={{
           pageSize: 10,
           showSizeChanger: false
@@ -175,7 +192,6 @@ export default function Clients() {
         okText="Сохранить"
         width={isMobile ? '100%' : 500}
         style={isMobile ? { top: 0 } : {}}
-        bodyStyle={isMobile ? { padding: 16 } : {}}
       >
         <Form form={form} layout="vertical">
           <Form.Item

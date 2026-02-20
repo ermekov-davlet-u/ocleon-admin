@@ -1,1 +1,1 @@
-export const mainURL = "http://localhost:5000/"
+export const mainURL = "https://ocleon.333.kg/"

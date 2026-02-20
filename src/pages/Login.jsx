@@ -37,8 +37,7 @@ const LoginPage = ({ onSuccess }) => {
             label="Email"
             name="email"
             rules={[
-              { required: true, message: "Введите email" },
-              { type: "email", message: "Некорректный email" },
+              { required: true, message: "Введите имя" },
             ]}
           >
             <Input

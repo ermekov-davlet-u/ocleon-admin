@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 
 const devices = {
-  iphone: { width: 200, height: 400, borderRadius: 30, cameras: [{cx: 100, cy: 50, r: 15}, {cx: 130, cy: 50, r: 10}] },
-  samsung: { width: 210, height: 420, borderRadius: 35, cameras: [{cx: 105, cy: 55, r: 12}, {cx: 135, cy: 55, r: 12}] },
-  pixel: { width: 190, height: 390, borderRadius: 25, cameras: [{cx: 95, cy: 45, r: 10}] },
-  xiaomi: { width: 205, height: 410, borderRadius: 28, cameras: [{cx: 102, cy: 48, r: 14}, {cx: 130, cy: 48, r: 9}] },
+  iphone: { width: 200, height: 400, borderRadius: 30, cameras: [{ cx: 100, cy: 50, r: 15 }, { cx: 130, cy: 50, r: 10 }] },
+  samsung: { width: 210, height: 420, borderRadius: 35, cameras: [{ cx: 105, cy: 55, r: 12 }, { cx: 135, cy: 55, r: 12 }] },
+  pixel: { width: 190, height: 390, borderRadius: 25, cameras: [{ cx: 95, cy: 45, r: 10 }] },
+  xiaomi: { width: 205, height: 410, borderRadius: 28, cameras: [{ cx: 102, cy: 48, r: 14 }, { cx: 130, cy: 48, r: 9 }] },
 };
 
 const PhoneCaseDesigner = () => {

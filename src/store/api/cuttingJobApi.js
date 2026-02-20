@@ -24,11 +24,11 @@ export const cuttingJobApi = createApi({
       }),
       invalidatesTags: ["CuttingJob"],
     }),
-     previewCuttingJob: builder.mutation({
+    previewCuttingJob: builder.query({
       query: (data) => ({
         url: "/cutting-jobs/for-cutting",
-        method: "POST",
-        body: data,
+        method: "GET",
+        params: data,
       }),
     }),
     updateCuttingJob: builder.mutation({
@@ -52,7 +52,7 @@ export const cuttingJobApi = createApi({
 export const {
   useGetCuttingJobsQuery,
   useGetCuttingJobQuery,
-  usePreviewCuttingJobMutation,
+  usePreviewCuttingJobQuery,
   useCreateCuttingJobMutation,
   useUpdateCuttingJobMutation,
   useDeleteCuttingJobMutation,

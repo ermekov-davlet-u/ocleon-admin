@@ -1,4 +1,4 @@
-import { Table, Button, Tag, Space, message } from 'antd';
+import { Table, Button, Tag, Space, message, Modal } from 'antd';
 import { useGetOrdersQuery, useDeleteOrderMutation, useChangeOrderStatusMutation } from '../store/api/orderApi';
 
 export const CuttingOrderStatus = {
@@ -20,14 +20,23 @@ const CuttingOrdersTable = () => {
   const [deleteOrder] = useDeleteOrderMutation();
   const [changeStatus] = useChangeOrderStatusMutation();
 
-  const handleDelete = async (id) => {
-    try {
-      await deleteOrder(id).unwrap();
-      message.success('Заказ удален');
-      refetch();
-    } catch {
-      message.error('Ошибка при удалении');
-    }
+  const handleDelete = (id) => {
+    Modal.confirm({
+      title: 'Подтверждение удаления',
+      content: 'Вы уверены, что хотите удалить этот заказ?',
+      okText: 'Да',
+      cancelText: 'Отмена',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteOrder(id).unwrap();
+          message.success('Заказ удален');
+          refetch();
+        } catch {
+          message.error('Ошибка при удалении');
+        }
+      },
+    });
   };
 
   const handleStatusChange = async (id, status) => {
@@ -38,6 +47,18 @@ const CuttingOrdersTable = () => {
     } catch {
       message.error('Ошибка при обновлении статуса');
     }
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '-';
+    const d = new Date(date);
+    return d.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const columns = [
@@ -60,8 +81,15 @@ const CuttingOrdersTable = () => {
     },
     {
       title: 'Резка',
-      dataIndex: ['cuttingJob', 'name'],
       key: 'cuttingJob',
+      render: (_, record) => {
+        const job = record.cuttingJob;
+        if (!job) return "-";
+        const materialName = job.material?.name || "";
+        const armorName = job.armorType?.name || "";
+        const deviceName = job.deviceType?.name || "";
+        return `${materialName} / ${armorName} на ${deviceName}`;
+      }
     },
     {
       title: 'Кол-во',
@@ -73,6 +101,23 @@ const CuttingOrdersTable = () => {
       dataIndex: 'status',
       key: 'status',
       render: (status) => <Tag color={statusColors[status]}>{status}</Tag>,
+    },
+    {
+      title: 'Сумма',
+      dataIndex: 'totalAmount',
+      key: 'totalAmount',
+    },
+    {
+      title: 'Итоговая сумма',
+      dataIndex: 'finalAmount',
+      key: 'finalAmount',
+    },
+    {
+      title: 'Дата создания',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      responsive: ['md'],
+      render: (date) => formatDate(date),
     },
     {
       title: 'Действия',
@@ -89,6 +134,9 @@ const CuttingOrdersTable = () => {
               Готово
             </Button>
           )}
+          <Button size="small" danger onClick={() => handleDelete(record.id)}>
+            Удалить
+          </Button>
         </Space>
       ),
     },

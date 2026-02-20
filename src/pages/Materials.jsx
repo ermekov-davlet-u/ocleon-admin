@@ -134,7 +134,7 @@ export default function Materials() {
         columns={columns}
         bordered
         scroll={{ x: true }} // горизонтальный скролл
-        size={isMobile ? "small" : "middle"}
+        size={"small"}
         pagination={{
           pageSize: 10,
           showSizeChanger: false,

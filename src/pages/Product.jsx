@@ -12,7 +12,7 @@ import {
   Grid,
   Row,
   Col,
-  Card,
+  Modal,
 } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import {
@@ -37,33 +37,43 @@ export default function CuttingJobPage() {
   const { data: cuttingTypes } = useGetArmorTypesQuery();
   const { data: deviceTypes } = useGetDeviceTypesQuery();
 
-  const [createJob, { isLoading: creating }] = useCreateCuttingJobMutation();
-  const [updateJob, { isLoading: updating }] = useUpdateCuttingJobMutation();
+  const [createJob] = useCreateCuttingJobMutation();
+  const [updateJob] = useUpdateCuttingJobMutation();
   const [deleteJob] = useDeleteCuttingJobMutation();
 
   const [editingJob, setEditingJob] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
 
-  const openEditModal = (job) => {
+  // --- открываем модалку для создания/редактирования ---
+  const openModal = (job = null) => {
     setEditingJob(job);
-    form.setFieldsValue({
-      materialId: job.material?.id,
-      cuttingTypeId: job.armorType?.id,
-      deviceTypeId: job.deviceType?.id,
-      quantity: job.quantity,
-      notes: job.notes,
-    });
+    if (job) {
+      form.setFieldsValue({
+        materialId: job.material?.id,
+        cuttingTypeId: job.armorType?.id,
+        deviceTypeId: job.deviceType?.id,
+        price: job.price,
+        notes: job.notes,
+        file: [], // файл для редактирования пустой
+      });
+    } else {
+      form.resetFields();
+      form.setFieldsValue({ price: 0 });
+    }
+    setIsModalOpen(true);
   };
 
-  const resetForm = () => {
+  const closeModal = () => {
     setEditingJob(null);
     form.resetFields();
+    setIsModalOpen(false);
   };
 
+  // --- отправка формы ---
   const onFinish = async (values) => {
     try {
       const formData = new FormData();
-
       Object.keys(values).forEach((key) => {
         if (key === "file" && values.file?.length > 0) {
           formData.append("file", values.file[0].originFileObj);
@@ -80,7 +90,7 @@ export default function CuttingJobPage() {
         message.success("Задание создано");
       }
 
-      resetForm();
+      closeModal();
     } catch {
       message.error("Ошибка при сохранении");
     }
@@ -98,28 +108,19 @@ export default function CuttingJobPage() {
   const columns = [
     { title: "ID", dataIndex: "id", width: 60, responsive: ["lg"] },
     { title: "Материал", dataIndex: ["material", "name"] },
-    { title: "Тип резки", dataIndex: ["armorType", "name"], responsive: ["md"] },
-    { title: "Устройство", dataIndex: ["deviceType", "name"], responsive: ["md"] },
-    { title: "Кол-во", dataIndex: "quantity", width: 80 },
-    {
-      title: "Примечание",
-      dataIndex: "notes",
-      ellipsis: true,
-      responsive: ["lg"],
-    },
+    { title: "Тип резки", dataIndex: ["armorType", "name"] },
+    { title: "Устройство", dataIndex: ["deviceType", "name"] },
+    { title: "Файл", dataIndex: ["filePath"] },
+    { title: "Цена", dataIndex: "price", width: 100 },
+    { title: "Примечание", dataIndex: "notes", ellipsis: true, responsive: ["lg"] },
     {
       title: "Действия",
       render: (_, record) => (
         <Space direction={isMobile ? "vertical" : "horizontal"}>
-          <Button size="small" type="link" onClick={() => openEditModal(record)}>
+          <Button size="small" type="link" onClick={() => openModal(record)}>
             Ред.
           </Button>
-          <Button
-            size="small"
-            type="link"
-            danger
-            onClick={() => handleDelete(record.id)}
-          >
+          <Button size="small" type="link" danger onClick={() => handleDelete(record.id)}>
             Уд.
           </Button>
         </Space>
@@ -129,22 +130,44 @@ export default function CuttingJobPage() {
 
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Card
-        title={editingJob ? "Редактирование" : "Создание задания"}
-        style={{ marginBottom: 20 }}
+      <Button
+        type="primary"
+        onClick={() => openModal(null)}
+        style={{ marginBottom: 16 }}
+      >
+        Создать задание
+      </Button>
+
+      <Table
+        rowKey="id"
+        dataSource={jobs}
+        columns={columns}
+        loading={isLoading}
+        scroll={{ x: true }}
+        size={"small"}
+        bordered
+      />
+
+      {/* --- Модалка с формой --- */}
+      <Modal
+        title={editingJob ? "Редактирование задания" : "Создание задания"}
+        open={isModalOpen}
+        onCancel={closeModal}
+        onOk={() => form.submit()}
+        okText={editingJob ? "Сохранить" : "Создать"}
+        width={isMobile ? "95%" : 600}
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={onFinish}
-          initialValues={{ quantity: 1 }}
         >
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
+          <Row gutter={8}>
+            <Col xs={24}>
               <Form.Item
                 label="Материал"
                 name="materialId"
-                rules={[{ required: true }]}
+                rules={[{ required: true, message: "Выберите материал" }]}
               >
                 <Select placeholder="Материал">
                   {materials?.map((m) => (
@@ -160,7 +183,7 @@ export default function CuttingJobPage() {
               <Form.Item
                 label="Тип резки"
                 name="cuttingTypeId"
-                rules={[{ required: true }]}
+                rules={[{ required: true, message: "Выберите тип резки" }]}
               >
                 <Select placeholder="Тип резки">
                   {cuttingTypes?.map((c) => (
@@ -176,7 +199,7 @@ export default function CuttingJobPage() {
               <Form.Item
                 label="Устройство"
                 name="deviceTypeId"
-                rules={[{ required: true }]}
+                rules={[{ required: true, message: "Выберите устройство" }]}
               >
                 <Select placeholder="Устройство">
                   {deviceTypes?.map((d) => (
@@ -189,8 +212,8 @@ export default function CuttingJobPage() {
             </Col>
 
             <Col xs={24} md={8}>
-              <Form.Item label="Количество" name="quantity">
-                <InputNumber min={1} style={{ width: "100%" }} />
+              <Form.Item label="Цена" name="price">
+                <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
@@ -205,9 +228,7 @@ export default function CuttingJobPage() {
                 label="Файл"
                 name="file"
                 valuePropName="fileList"
-                getValueFromEvent={(e) =>
-                  Array.isArray(e) ? e : e?.fileList
-                }
+                getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
               >
                 <Upload beforeUpload={() => false} maxCount={1}>
                   <Button icon={<UploadOutlined />} block={isMobile}>
@@ -216,38 +237,9 @@ export default function CuttingJobPage() {
                 </Upload>
               </Form.Item>
             </Col>
-
-            <Col xs={24}>
-              <Space style={{ width: "100%" }} direction={isMobile ? "vertical" : "horizontal"}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={creating || updating}
-                  block={isMobile}
-                >
-                  {editingJob ? "Сохранить" : "Создать"}
-                </Button>
-
-                {editingJob && (
-                  <Button onClick={resetForm} block={isMobile}>
-                    Отмена
-                  </Button>
-                )}
-              </Space>
-            </Col>
           </Row>
         </Form>
-      </Card>
-
-      <Table
-        rowKey="id"
-        dataSource={jobs}
-        columns={columns}
-        loading={isLoading}
-        scroll={{ x: true }}
-        size={isMobile ? "small" : "middle"}
-        bordered
-      />
+      </Modal>
     </div>
   );
 }

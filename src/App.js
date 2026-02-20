@@ -108,7 +108,7 @@ function App() {
           )}
         </Header> */}
 
-        <Content style={{ maxWidth: "calc(100vw - 24px)" }}>
+        <Content style={{ maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 80px)", overflow: "auto" }}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={<Dashboard />} />
