@@ -1,16 +1,28 @@
+// src/pages/LoginPage.tsx
 import React from "react";
-import { Form, Input, Button, Card, Typography } from "antd";
+import { Form, Input, Button, Card, Typography, message } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { useLoginMutation } from "../store/api/authApi";
 
 const { Title, Text } = Typography;
 
 const LoginPage = ({ onSuccess }) => {
-  const onFinish = (values) => {
-    console.log("Login data:", values);
+  const [login, { isLoading }] = useLoginMutation();
 
-    // TODO: тут будет API логина
-    // если логин успешный:
-    onSuccess();
+  const onFinish = async (values) => {
+    try {
+      const response = await login({
+        username: values.email, // твой backend ожидает username
+        password: values.password,
+      }).unwrap();
+
+      console.log("Login success:", response);
+      message.success("Вы успешно вошли!");
+      onSuccess();
+    } catch (err) {
+      console.error("Login error:", err);
+      message.error("Неверный логин или пароль");
+    }
   };
 
   return (
@@ -27,24 +39,13 @@ const LoginPage = ({ onSuccess }) => {
           Пожалуйста, войдите в аккаунт
         </Text>
 
-        <Form
-          name="login"
-          layout="vertical"
-          onFinish={onFinish}
-          autoComplete="off"
-        >
+        <Form name="login" layout="vertical" onFinish={onFinish} autoComplete="off">
           <Form.Item
             label="Email"
             name="email"
-            rules={[
-              { required: true, message: "Введите имя" },
-            ]}
+            rules={[{ required: true, message: "Введите имя" }]}
           >
-            <Input
-              size="large"
-              prefix={<UserOutlined />}
-              placeholder="example@mail.com"
-            />
+            <Input size="large" prefix={<UserOutlined />} placeholder="example@mail.com" />
           </Form.Item>
 
           <Form.Item
@@ -52,15 +53,11 @@ const LoginPage = ({ onSuccess }) => {
             name="password"
             rules={[{ required: true, message: "Введите пароль" }]}
           >
-            <Input.Password
-              size="large"
-              prefix={<LockOutlined />}
-              placeholder="••••••••"
-            />
+            <Input.Password size="large" prefix={<LockOutlined />} placeholder="••••••••" />
           </Form.Item>
 
           <Form.Item style={{ marginTop: 24 }}>
-            <Button type="primary" htmlType="submit" size="large" block>
+            <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
               Войти
             </Button>
           </Form.Item>

@@ -90,6 +90,8 @@ export default function CuttingOrders() {
   useEffect(() => {
     if (!manualSumma && cuttingJobPreview?.price) {
       setSumma(cuttingJobPreview.price * quantity);
+    } else {
+      setSumma(0);
     }
   }, [cuttingJobPreview, quantity, manualSumma]);
 
@@ -212,6 +214,7 @@ export default function CuttingOrders() {
 
       await createOrder({
         cuttingJobId: newCuttingJob.id,
+        material: selectedMaterial,
         quantity,
         notes,
         clientName,
@@ -255,8 +258,42 @@ export default function CuttingOrders() {
     }
   };
 
+
+  const handleRecreateOrder = async (record) => {
+    try {
+      console.log(record);
+      await createOrder({
+        cuttingJobId: record.cuttingJob.id,
+        quantity: 1,
+        material: selectedMaterial,
+        notes,
+        clientName: record.client.name,
+        clientPhone: record.client.phone,
+        clientEmail: record.client.email,
+        discountId: record?.discount?.id,
+        summa: record.summa
+      }).unwrap();
+
+      message.success("Заказ повторно создан!");
+    } catch (err) {
+      console.error(err);
+      message.error("Ошибка при повторном создании");
+    }
+  };
+
   const columns = [
-    { title: "Материал", dataIndex: ["cuttingJob", "material", "name"] },
+    // { title: "Материал", dataIndex: ["material", "name"] },
+    // {
+    //   title: 'Клиент',
+    //   dataIndex: ['client', 'name'],
+    //   key: 'client',
+    // },
+    {
+      title: 'Телефон',
+      dataIndex: ['client', 'phone'],
+      key: 'phone',
+      responsive: ['md'],
+    },
     { title: "Тип резки", dataIndex: ["cuttingJob", "armorType", "name"] },
     { title: "Устройство", dataIndex: ["cuttingJob", "deviceType", "name"] },
     { title: "Кол-во", dataIndex: "quantity" },
@@ -265,23 +302,35 @@ export default function CuttingOrders() {
       title: "Действия",
       render: (_, record) => (
         <Space>
-          <Button
-            type="primary"
-            disabled={record.status === "DONE" || record.status === "DEFECT"}
-            onClick={() => handleStatusChange(record.id, "DONE")}
-          >
-            Провести
-          </Button>
-          <Button
-            danger
-            disabled={record.status === "DONE" || record.status === "DEFECT"}
-            onClick={() => handleStatusChange(record.id, "DEFECT")}
-          >
-            Брак
-          </Button>
+          {record.status !== "DONE" && record.status !== "DEFECT" && (
+            <>
+              <Button
+                type="primary"
+                onClick={() => handleStatusChange(record.id, "DONE")}
+              >
+                Провести
+              </Button>
+
+              <Button
+                danger
+                onClick={() => handleStatusChange(record.id, "DEFECT")}
+              >
+                Брак
+              </Button>
+            </>
+          )}
+
+          {record.status === "DEFECT" && (
+            <Button
+              type="dashed"
+              onClick={() => handleRecreateOrder(record)}
+            >
+              Повторить
+            </Button>
+          )}
         </Space>
       ),
-    },
+    }
   ];
 
   return (
@@ -319,25 +368,27 @@ export default function CuttingOrders() {
         </Col>
         <Col xs={24} sm={12} md={3}>
           <Button type="primary" onClick={handleCreateClick} block>
-            Создать
+            Начать
           </Button>
         </Col>
       </Row>
 
       {/* Клиент */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={8}>
+        {/* <Col xs={24} sm={12} md={8}>
           <Input placeholder="Имя клиента" value={clientName} onChange={(e) => setClientName(e.target.value)} />
-        </Col>
+        </Col> */}
         <Col xs={24} sm={12} md={8}>
           <Input placeholder="Телефон клиента *" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
         </Col>
-        <Col xs={24} sm={12} md={8}>
+        {/* <Col xs={24} sm={12} md={8}>
           <Input placeholder="Email клиента" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
-        </Col>
+        </Col> */}
       </Row>
 
-      <Table dataSource={cuttingJobs} columns={columns} rowKey="id" size="small" loading={isLoading} bordered scroll={{ x: true }} />
+      <Table
+        dataSource={cuttingJobs} columns={columns}
+        rowKey="id" size="small" loading={isLoading} bordered scroll={{ x: true }} />
 
       {/* Модалка подтверждения резки */}
       <Modal

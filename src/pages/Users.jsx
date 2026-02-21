@@ -177,7 +177,7 @@ export default function Clients() {
         rowKey="id"
         bordered
         scroll={{ x: true }}
-        size={'small'}
+        size="small"
         pagination={{
           pageSize: 10,
           showSizeChanger: false

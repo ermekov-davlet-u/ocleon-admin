@@ -9,6 +9,7 @@ import { cuttingJobApi } from './api/cuttingJobApi';
 import { orderApi } from './api/orderApi';
 import { invoiceApi } from './api/invoiceApi';
 import { usersApi } from './api/userApi';
+import { authApi } from './api/authApi';
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ export const store = configureStore({
     [orderApi.reducerPath]: orderApi.reducer,
     [invoiceApi.reducerPath]: invoiceApi.reducer,
     [usersApi.reducerPath]: usersApi.reducer,
+    [authApi.reducerPath]: authApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
@@ -34,7 +36,8 @@ export const store = configureStore({
       armorTypesApi.middleware,
       orderApi.middleware,
       invoiceApi.middleware,
-      usersApi.middleware
+      usersApi.middleware,
+      authApi.middleware
     ),
 });
 

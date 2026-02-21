@@ -1,17 +1,6 @@
-import { Layout, Menu, Button } from "antd";
-import {
-  DashboardOutlined,
-  UserOutlined,
-  AppstoreOutlined,
-  FileTextOutlined,
-  ScissorOutlined,
-  TeamOutlined,
-  BankOutlined,
-  TagsOutlined,
-  SkinOutlined,
-  MenuOutlined,
-} from "@ant-design/icons";
-import { useState } from "react";
+import { Layout, Menu, Button, message } from "antd";
+import { DashboardOutlined, UserOutlined, AppstoreOutlined, FileTextOutlined, ScissorOutlined, TeamOutlined, BankOutlined, TagsOutlined, SkinOutlined, MenuOutlined } from "@ant-design/icons";
+import { useState, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
@@ -33,10 +22,31 @@ const { Header, Content, Footer, Sider } = Layout;
 function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [isAuth, setIsAuth] = useState(!!localStorage.getItem("token"));
+  const [isAuth, setIsAuth] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Проверка токена при загрузке
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsAuth(false);
+      setCheckingAuth(false);
+      return;
+    }
+
+    // Здесь можно добавить реальную проверку токена через API
+    // Например: fetch('/api/validate-token', { headers: { Authorization: `Bearer ${token}` }})
+    // Для примера просто считаем токен валидным
+    setIsAuth(true);
+    setCheckingAuth(false);
+  }, []);
+
+  if (checkingAuth) {
+    return <div>Проверка авторизации...</div>;
+  }
 
   if (!isAuth) {
     return (
@@ -45,14 +55,22 @@ function App() {
           localStorage.setItem("token", token);
           setIsAuth(true);
           navigate("/dashboard");
+          message.success("Вы успешно вошли!");
         }}
       />
     );
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsAuth(false);
+    navigate("/");
+  };
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
+        width={300}
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
@@ -85,30 +103,14 @@ function App() {
             { key: "/types", icon: <TagsOutlined />, label: "Вид резки" },
             { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
             { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
-            { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотре" },
+            { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
+            { key: "logout", icon: <UserOutlined />, label: "Выйти", onClick: handleLogout },
           ]}
         />
       </Sider>
 
       <Layout style={{ marginLeft: mobile ? 0 : collapsed ? 0 : 0 }}>
-        {/* <Header
-          style={{
-            background: "#fff",
-            padding: "0 16px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          {mobile && (
-            <Button
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
-            />
-          )}
-        </Header> */}
-
-        <Content style={{ maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 80px)", overflow: "auto" }}>
+        <Content style={{ maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 80px)", overflow: "auto", margin: 12 }}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={<Dashboard />} />
@@ -126,9 +128,7 @@ function App() {
           </Routes>
         </Content>
 
-        <Footer style={{ textAlign: "center" }}>
-          Admin ©2026
-        </Footer>
+        <Footer style={{ textAlign: "center" }}>Admin ©2026</Footer>
       </Layout>
     </Layout>
   );
