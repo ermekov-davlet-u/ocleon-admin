@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Table, 
-  Button, 
-  Modal, 
-  Form, 
-  Input, 
-  Switch, 
-  Space, 
-  message, 
-  Grid 
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Switch,
+  Space,
+  message,
+  Grid
 } from 'antd';
 
 import {
@@ -105,16 +105,16 @@ export default function DeviceTypeTable() {
       key: 'actions',
       render: (_, record) => (
         <Space direction={isMobile ? 'vertical' : 'horizontal'}>
-          <Button 
-            type="link" 
+          <Button
+            type="link"
             size={isMobile ? 'small' : 'middle'}
             onClick={() => handleEdit(record)}
           >
             Редактировать
           </Button>
-          <Button 
-            type="link" 
-            danger 
+          <Button
+            type="link"
+            danger
             size={isMobile ? 'small' : 'middle'}
             onClick={() => handleDelete(record.id)}
           >
@@ -139,8 +139,8 @@ export default function DeviceTypeTable() {
           style={{ width: isMobile ? '100%' : 250 }}
         />
 
-        <Button 
-          type="primary" 
+        <Button
+          type="primary"
           onClick={handleAdd}
           block={isMobile}
         >
@@ -157,7 +157,7 @@ export default function DeviceTypeTable() {
           pageSize: 10,
           showSizeChanger: false,
         }}
-        size={isMobile ? 'small' : 'middle'}
+        size={'small'}
       />
 
       <Modal

@@ -175,7 +175,7 @@ export default function Types() {
         bordered
         pagination={{ pageSize: 8 }}
         scroll={{ x: true }}
-        size={"small"}
+        size="small"
       />
 
       {/* Модалка */}

@@ -11,6 +11,10 @@ export const materialsApi = createApi({
       query: () => 'materials',
       providesTags: ['Materials'],
     }),
+    getDiscounts: builder.query({
+      query: () => 'discount',
+      providesTags: ['discount'],
+    }),
     createMaterial: builder.mutation({
       query: (body) => ({
         url: 'materials',
@@ -39,6 +43,7 @@ export const materialsApi = createApi({
 
 export const {
   useGetMaterialsQuery,
+  useGetDiscountsQuery,
   useCreateMaterialMutation,
   useUpdateMaterialMutation,
   useDeleteMaterialMutation,

@@ -92,15 +92,15 @@ const CuttingOrdersTable = () => {
       sorter: (a, b) => a.id - b.id,
       responsive: ['md'],
     },
+    // {
+    //   title: 'Клиент',
+    //   dataIndex: ['client', 'name'],
+    //   key: 'client',
+    //   filters: Array.from(new Set(orders?.map(o => o.client?.name || '-'))).map(n => ({ text: n, value: n })),
+    //   onFilter: (value, record) => (record.client?.name || '-') === value,
+    // },
     {
       title: 'Клиент',
-      dataIndex: ['client', 'name'],
-      key: 'client',
-      filters: Array.from(new Set(orders?.map(o => o.client?.name || '-'))).map(n => ({ text: n, value: n })),
-      onFilter: (value, record) => (record.client?.name || '-') === value,
-    },
-    {
-      title: 'Телефон',
       dataIndex: ['client', 'phone'],
       key: 'phone',
       responsive: ['md'],
@@ -108,7 +108,7 @@ const CuttingOrdersTable = () => {
     {
       title: 'Материал',
       key: 'material',
-      render: (_, record) => record.cuttingJob?.material?.name || '-',
+      render: (_, record) => record.material?.name || '-',
       filters: Array.from(new Set(orders?.map(o => o.cuttingJob?.material?.name || '-'))).map(n => ({ text: n, value: n })),
       onFilter: (value, record) => (record.cuttingJob?.material?.name || '-') === value,
     },
