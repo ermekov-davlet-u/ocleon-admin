@@ -1,4 +1,3 @@
-// store/materialsApi.js
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { mainURL } from '../../config';
 
@@ -7,30 +6,46 @@ export const materialsApi = createApi({
   baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
   tagTypes: ['Materials'],
   endpoints: (builder) => ({
+
     getMaterials: builder.query({
       query: () => 'materials',
       providesTags: ['Materials'],
     }),
-    getDiscounts: builder.query({
-      query: () => 'discount',
-      providesTags: ['discount'],
+
+    getMaterial: builder.query({
+      query: (id) => `materials/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Materials', id }],
     }),
+
+    // ✅ FormData — поддерживает файлы
     createMaterial: builder.mutation({
-      query: (body) => ({
+      query: (formData) => ({
         url: 'materials',
         method: 'POST',
-        body,
+        body: formData, // FormData
       }),
       invalidatesTags: ['Materials'],
     }),
+
+    // ✅ FormData — поддерживает файлы
     updateMaterial: builder.mutation({
-      query: ({ id, ...body }) => ({
+      query: ({ id, formData }) => ({
         url: `materials/${id}`,
         method: 'PATCH',
-        body,
+        body: formData, // FormData
       }),
       invalidatesTags: ['Materials'],
     }),
+
+    // ✅ Удалить один файл материала
+    deleteMaterialFile: builder.mutation({
+      query: ({ materialId, fileId }) => ({
+        url: `materials/${materialId}/files/${fileId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Materials'],
+    }),
+
     deleteMaterial: builder.mutation({
       query: (id) => ({
         url: `materials/${id}`,
@@ -43,8 +58,9 @@ export const materialsApi = createApi({
 
 export const {
   useGetMaterialsQuery,
-  useGetDiscountsQuery,
+  useGetMaterialQuery,
   useCreateMaterialMutation,
   useUpdateMaterialMutation,
+  useDeleteMaterialFileMutation,
   useDeleteMaterialMutation,
 } = materialsApi;

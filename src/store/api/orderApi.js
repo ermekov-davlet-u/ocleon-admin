@@ -18,6 +18,10 @@ export const orderApi = createApi({
       }),
       invalidatesTags: ['CuttingOrder'],
     }),
+    getClientHistory: builder.query({
+      query: (phone) => `/cutting-orders/client-history?phone=${encodeURIComponent(phone)}`,
+    }),
+
     updateOrder: builder.mutation({
       query: ({ id, ...body }) => ({
         url: `cutting-orders/${id}`,
@@ -49,6 +53,7 @@ export const {
   useGetOrdersQuery,
   useCreateOrderMutation,
   useUpdateOrderMutation,
+  useGetClientHistoryQuery,
   useDeleteOrderMutation,
   useChangeOrderStatusMutation
 } = orderApi;
