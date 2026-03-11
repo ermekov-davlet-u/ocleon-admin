@@ -24,7 +24,7 @@ import {
 import { useCreateArmorTypeMutation, useGetArmorTypesQuery } from "../store/api/armorTypesApi";
 import { useCreateCuttingJobMutation } from "../store/api/cuttingApi";
 import { usePreviewCuttingJobQuery } from "../store/api/cuttingJobApi";
-import { useCreateMaterialMutation, useGetDiscountsQuery, useGetMaterialsQuery } from "../store/api/materialsApi";
+import { useCreateMaterialMutation, useGetMaterialsQuery } from "../store/api/materialsApi";
 import { useCreateDeviceTypeMutation, useGetDeviceTypesQuery } from "../store/api/deviceTypeApi";
 import { useGetDiscountsQuery } from "../store/api/discountApi";
 

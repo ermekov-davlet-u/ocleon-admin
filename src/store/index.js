@@ -11,6 +11,7 @@ import { invoiceApi } from './api/invoiceApi';
 import { usersApi } from './api/userApi';
 import { authApi } from './api/authApi';
 import { discountApi } from './api/discountApi';
+import { bookingsApi } from './api/bookingsApi';
 
 export const store = configureStore({
   reducer: {
@@ -21,14 +22,16 @@ export const store = configureStore({
     [branchesApi.reducerPath]: branchesApi.reducer,
     [armorTypesApi.reducerPath]: armorTypesApi.reducer,
     [cuttingJobApi.reducerPath]: cuttingJobApi.reducer,
-    [orderApi.reducerPath]: orderApi.reducer, 
+    [orderApi.reducerPath]: orderApi.reducer,
     [invoiceApi.reducerPath]: invoiceApi.reducer,
     [discountApi.reducerPath]: discountApi.reducer,
     [usersApi.reducerPath]: usersApi.reducer,
     [authApi.reducerPath]: authApi.reducer,
+    [bookingsApi.reducerPath]: bookingsApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
+      authApi.middleware,
       cuttingApi.middleware,
       deviceTypeApi.middleware,
       materialsApi.middleware,
@@ -39,7 +42,7 @@ export const store = configureStore({
       orderApi.middleware,
       invoiceApi.middleware,
       usersApi.middleware,
-      authApi.middleware,
+      bookingsApi.middleware,
       discountApi.middleware
     ),
 });

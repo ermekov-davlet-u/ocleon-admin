@@ -33,6 +33,7 @@ import IncomingInvoiceForm from "./pages/IncomingInvoiceForm";
 import PhoneCasePreview from "./pages/PreviewPage";
 import DiscountsPage from "./pages/DiscountsPage";
 import CuttingOrdersVisual from "./pages/CuttingOrdersVisual";
+import BookingsTable from "./pages/BookingsTable";
 
 const { Header, Content, Footer, Sider } = Layout;
 const { Text } = Typography;
@@ -181,19 +182,20 @@ function App() {
             marginTop: 8,
           }}
           items={[
-            { key: "/dashboard",   icon: <DashboardOutlined />, label: "Dashboard" },
-            { key: "/users",       icon: <UserOutlined />,      label: "Клиенты" },
-            { key: "/materials",   icon: <AppstoreOutlined />,  label: "Материалы" },
-            { key: "/invoices",    icon: <FileTextOutlined />,  label: "Накладная" },
-            { key: "/invoiceForm", icon: <FileTextOutlined />,  label: "Приход товара" },
-            { key: "/cutting",     icon: <ScissorOutlined />,   label: "Резка" },
-            { key: "/employee",    icon: <TeamOutlined />,      label: "Работники" },
-            { key: "/branches",    icon: <BankOutlined />,      label: "Филиалы" },
-            { key: "/discount",    icon: <BankOutlined />,      label: "Скидки" },
-            { key: "/types",       icon: <TagsOutlined />,      label: "Вид резки" },
-            { key: "/products",    icon: <SkinOutlined />,      label: "Для резки" },
-            { key: "/devices",     icon: <SkinOutlined />,      label: "Типы устройств" },
-            { key: "/preview",     icon: <SkinOutlined />,      label: "Предварительный просмотр" },
+            { key: "/dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
+            { key: "/users", icon: <UserOutlined />, label: "Клиенты" },
+            { key: "/materials", icon: <AppstoreOutlined />, label: "Материалы" },
+            { key: "/invoices", icon: <FileTextOutlined />, label: "Накладная" },
+            { key: "/invoiceForm", icon: <FileTextOutlined />, label: "Приход товара" },
+            { key: "/cutting", icon: <ScissorOutlined />, label: "Резка" },
+            { key: "/employee", icon: <TeamOutlined />, label: "Работники" },
+            { key: "/branches", icon: <BankOutlined />, label: "Филиалы" },
+            { key: "/discount", icon: <BankOutlined />, label: "Скидки" },
+            { key: "/types", icon: <TagsOutlined />, label: "Вид резки" },
+            { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
+            { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
+            { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
+            { key: "/booking", icon: <SkinOutlined />, label: "Бронирования" },
           ]}
         />
       </Sider>
@@ -334,21 +336,22 @@ function App() {
           overflow: "auto",
         }}>
           <Routes>
-            <Route path="/"             element={<Navigate to="/dashboard" />} />
-            <Route path="/dashboard"    element={<Dashboard />} />
-            <Route path="/users"        element={<Users />} />
-            <Route path="/materials"    element={<Materials />} />
-            <Route path="/invoices"     element={<IncomingInvoices />} />
-            <Route path="/discount"     element={<DiscountsPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/materials" element={<Materials />} />
+            <Route path="/invoices" element={<IncomingInvoices />} />
+            <Route path="/discount" element={<DiscountsPage />} />
             <Route path="/order-visual" element={<CuttingOrdersVisual />} />
-            <Route path="/cutting"      element={<CuttingFiles />} />
-            <Route path="/employee"     element={<Employees />} />
-            <Route path="/branches"     element={<Branches />} />
-            <Route path="/types"        element={<Types />} />
-            <Route path="/products"     element={<Products />} />
-            <Route path="/devices"      element={<DeviceTypeTable />} />
-            <Route path="/invoiceForm"  element={<IncomingInvoiceForm />} />
-            <Route path="/preview"      element={<PhoneCasePreview />} />
+            <Route path="/cutting" element={<CuttingFiles />} />
+            <Route path="/employee" element={<Employees />} />
+            <Route path="/branches" element={<Branches />} />
+            <Route path="/types" element={<Types />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/devices" element={<DeviceTypeTable />} />
+            <Route path="/invoiceForm" element={<IncomingInvoiceForm />} />
+            <Route path="/preview" element={<PhoneCasePreview />} />
+            <Route path="/booking" element={<BookingsTable />} />
           </Routes>
         </Content>
 
