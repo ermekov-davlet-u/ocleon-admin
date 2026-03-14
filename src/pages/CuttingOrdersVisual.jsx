@@ -1,14 +1,36 @@
 // pages/CuttingOrdersPage.jsx
 import { useEffect, useState, useMemo } from "react";
 import {
-	Button, InputNumber, Select, Modal, message, Input,
-	Row, Col, Space, Upload, Tag, Tooltip, Drawer,
-	Timeline, Spin, Empty, Divider, Alert, Table,
+	Button,
+	InputNumber,
+	Select,
+	Modal,
+	message,
+	Input,
+	Row,
+	Col,
+	Space,
+	Upload,
+	Tag,
+	Tooltip,
+	Drawer,
+	Timeline,
+	Spin,
+	Empty,
+	Divider,
+	Alert,
+	Table,
 } from "antd";
 import {
-	UploadOutlined, PlusOutlined, PercentageOutlined, TagOutlined,
-	SearchOutlined, SafetyCertificateOutlined, CheckCircleOutlined,
-	CloseCircleOutlined, ExclamationCircleOutlined, ReloadOutlined,
+	UploadOutlined,
+	PlusOutlined,
+	PercentageOutlined,
+	TagOutlined,
+	SearchOutlined,
+	SafetyCertificateOutlined,
+	CheckCircleOutlined,
+	CloseCircleOutlined,
+	ExclamationCircleOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -16,6 +38,7 @@ import {
 	useCreateOrderMutation,
 	useChangeOrderStatusMutation,
 	useGetClientHistoryQuery,
+	useUseWarrantyMutation,
 } from "../store/api/orderApi";
 import { useCreateArmorTypeMutation, useGetArmorTypesQuery } from "../store/api/armorTypesApi";
 import { useCreateCuttingJobMutation } from "../store/api/cuttingApi";
@@ -31,26 +54,58 @@ const CARDS_PER_ROW = 6;
 const VISIBLE_ROWS = 2;
 const PAGE_SIZE = CARDS_PER_ROW * VISIBLE_ROWS; // 12
 
-const STATUS_COLOR = { NEW: "blue", IN_PROGRESS: "orange", DONE: "green", DEFECT: "red", REWORK: "purple" };
-const STATUS_LABEL = { NEW: "Новый", IN_PROGRESS: "В работе", DONE: "Выполнен", DEFECT: "Брак", REWORK: "Переделка" };
-const RULE_LABEL = { SECOND_WRAPPING: "Вторая оклейка", REFERRAL: "Привёл друга", SECOND_DEVICE: "Второе устройство", MANUAL: "Ручная" };
+const STATUS_COLOR = {
+	NEW: "blue",
+	IN_PROGRESS: "orange",
+	DONE: "green",
+	DEFECT: "red",
+	REWORK: "purple",
+};
+
+const STATUS_LABEL = {
+	NEW: "Новый",
+	IN_PROGRESS: "В работе",
+	DONE: "Выполнен",
+	DEFECT: "Брак",
+	REWORK: "Переделка",
+};
+
+const RULE_LABEL = {
+	SECOND_WRAPPING: "Вторая оклейка",
+	REFERRAL: "Привёл друга",
+	SECOND_DEVICE: "Второе устройство",
+	MANUAL: "Ручная",
+};
+
+function useIsMobile(breakpoint = 768) {
+	const [isMobile, setIsMobile] = useState(() =>
+		typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+	);
+
+	useEffect(() => {
+		const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	}, [breakpoint]);
+
+	return isMobile;
+}
 
 function calcDiscountedAmount(base, discount) {
 	if (!discount || !base) return base ?? 0;
+
 	switch (discount.type) {
-		case "PERCENT": 
-		case "PERCENTAGE": // Добавлено для обработки "PERCENTAGE"
+		case "PERCENT":
+		case "PERCENTAGE":
 			return Math.max(0, base - (base * discount.value) / 100);
-		case "FIXED": 
-			return Math.max(0, base - discount.value); // Исправлено для корректного вычитания
-		case "PRICE_OVERRIDE": 
-			return discount.value; 
-		default: 
+		case "FIXED":
+			return Math.max(0, base - discount.value);
+		case "PRICE_OVERRIDE":
+			return discount.value;
+		default:
 			return base;
 	}
 }
-
-
 
 // ── Хук поиска + пагинации ────────────────────────────────────────────────────
 function useSearchableCards(data, searchQuery) {
@@ -67,62 +122,118 @@ function useSearchableCards(data, searchQuery) {
 		);
 	}, [data, searchQuery]);
 
-	useEffect(() => { setPage(1); }, [searchQuery]);
+	useEffect(() => {
+		setPage(1);
+	}, [searchQuery]);
 
-	const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+	const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
 	const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
 	return { paged, filtered, page, setPage, totalPages };
 }
 
 // ── CardGrid ──────────────────────────────────────────────────────────────────
-function CardGrid({ title, data, selected, onSelect, renderCard, onAddNew }) {
+function CardGrid({ title, data, selected, onSelect, renderCard, onAddNew, isMobile }) {
 	const [search, setSearch] = useState("");
 	const { paged, filtered, page, setPage, totalPages } = useSearchableCards(data, search);
 
+	const columns = isMobile ? 2 : 6;
+
 	return (
-		<div style={{ marginBottom: 20 }}>
-			<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-				<span style={{ fontWeight: 600, fontSize: 13, color: "#333" }}>{title}</span>
-				<Space size={6}>
-					<span style={{ fontSize: 11, color: "#999" }}>{filtered.length} из {data.length}</span>
-					<Button size="small" icon={<PlusOutlined />} onClick={onAddNew} type="dashed">Добавить</Button>
+		<div style={{ marginBottom: isMobile ? 16 : 20 }}>
+			<div
+				style={{
+					display: "flex",
+					alignItems: isMobile ? "stretch" : "center",
+					justifyContent: "space-between",
+					marginBottom: 10,
+					gap: 8,
+					flexDirection: isMobile ? "column" : "row",
+				}}
+			>
+				<span style={{ fontWeight: 700, fontSize: isMobile ? 15 : 13, color: "#333" }}>
+					{title}
+				</span>
+
+				<Space size={6} wrap>
+					<span style={{ fontSize: 12, color: "#999" }}>
+						{filtered.length} из {data.length}
+					</span>
+					<Button
+						size={isMobile ? "middle" : "small"}
+						icon={<PlusOutlined />}
+						onClick={onAddNew}
+						type="dashed"
+						block={isMobile}
+					>
+						Добавить
+					</Button>
 				</Space>
 			</div>
 
 			<Input
-				size="small"
-				prefix={<SearchOutlined style={{ color: "#bbb" }} />}
-				placeholder={`Поиск...`}
+				size="large"
+				prefix={<SearchOutlined style={{ color: "#999", fontSize: 16 }} />}
+				placeholder="Поиск..."
 				value={search}
 				onChange={(e) => setSearch(e.target.value)}
 				allowClear
-				style={{ marginBottom: 8, borderRadius: 6 }}
+				style={{
+					marginBottom: 10,
+					borderRadius: 10,
+					height: 44,
+				}}
 			/>
 
 			{filtered.length === 0 ? (
-				<Empty description="Ничего не найдено" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: "12px 0" }} />
+				<Empty
+					description="Ничего не найдено"
+					image={Empty.PRESENTED_IMAGE_SIMPLE}
+					style={{ padding: "12px 0" }}
+				/>
 			) : (
-				<div style={{
-					display: "grid",
-					gridTemplateColumns: `repeat(${CARDS_PER_ROW}, 140px)`,
-					gridTemplateRows: `repeat(${VISIBLE_ROWS}, 1fr)`,
-					gap: 8,
-					overflowX: "auto",
-					overflowY: "hidden",
-					paddingBottom: 4,
-				}}>
-					{paged.map((item) => renderCard(item, selected, onSelect))}
+				<div
+					style={{
+						display: "grid",
+						gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+						gap: isMobile ? 10 : 8,
+						paddingBottom: 4,
+					}}
+				>
+					{paged.map((item) => renderCard(item, selected, onSelect, isMobile))}
 				</div>
 			)}
 
 			{totalPages > 1 && (
-				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
-					<Button size="small" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Назад</Button>
-					<span style={{ fontSize: 11, color: "#888" }}>
-						Страница {page} / {totalPages} ({filtered.length} записей)
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						marginTop: 10,
+						gap: 8,
+						flexWrap: "wrap",
+					}}
+				>
+					<Button
+						size={isMobile ? "middle" : "small"}
+						disabled={page === 1}
+						onClick={() => setPage((p) => p - 1)}
+					>
+						← Назад
+					</Button>
+
+					<span style={{ fontSize: 12, color: "#888" }}>
+						Страница {page} / {totalPages}
 					</span>
-					<Button size="small" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Вперёд →</Button>
+
+					<Button
+						size={isMobile ? "middle" : "small"}
+						disabled={page === totalPages}
+						onClick={() => setPage((p) => p + 1)}
+					>
+						Вперёд →
+					</Button>
 				</div>
 			)}
 		</div>
@@ -130,8 +241,9 @@ function CardGrid({ title, data, selected, onSelect, renderCard, onAddNew }) {
 }
 
 // ── Карточка устройства ───────────────────────────────────────────────────────
-function DeviceCard({ item, selected, onSelect }) {
+function DeviceCard({ item, selected, onSelect, isMobile }) {
 	const isSelected = selected?.id === item.id;
+
 	return (
 		<div
 			key={item.id}
@@ -139,34 +251,83 @@ function DeviceCard({ item, selected, onSelect }) {
 			style={{
 				cursor: "pointer",
 				border: `2px solid ${isSelected ? "#6c5ce7" : "#e8e8e8"}`,
-				borderRadius: 10, padding: "8px 6px",
+				borderRadius: 12,
+				padding: isMobile ? "10px 8px" : "8px 6px",
 				background: isSelected ? "#f0eeff" : "#fafafa",
-				textAlign: "center", transition: "all 0.15s",
-				userSelect: "none", position: "relative",
-				height: 110, display: "flex", flexDirection: "column",
-				alignItems: "center", justifyContent: "center",
+				textAlign: "center",
+				transition: "all 0.15s",
+				userSelect: "none",
+				position: "relative",
+				minHeight: isMobile ? 120 : 110,
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				justifyContent: "center",
 			}}
 		>
-			{isSelected && <CheckCircleOutlined style={{ position: "absolute", top: 4, right: 4, color: "#6c5ce7", fontSize: 12 }} />}
-			{item.imageUrl ? (
-				<img src={item.imageUrl} alt={item.name}
-					style={{ width: 48, height: 48, objectFit: "contain", marginBottom: 4 }}
-					onError={(e) => { e.target.style.display = "none"; }} />
-			) : (
-				<div style={{
-					width: 48, height: 48, borderRadius: 8, background: "#e8e3ff",
-					display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4, fontSize: 20
-				}}>📱</div>
+			{isSelected && (
+				<CheckCircleOutlined
+					style={{ position: "absolute", top: 6, right: 6, color: "#6c5ce7", fontSize: 14 }}
+				/>
 			)}
-			<div style={{ fontSize: 11, fontWeight: 600, color: "#333", lineHeight: 1.2, wordBreak: "break-word" }}>{item.name}</div>
-			{item.brand && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{item.brand}</div>}
+
+			{item.imageUrl ? (
+				<img
+					src={item.imageUrl}
+					alt={item.name}
+					style={{
+						width: isMobile ? 56 : 48,
+						height: isMobile ? 56 : 48,
+						objectFit: "contain",
+						marginBottom: 6,
+					}}
+					onError={(e) => {
+						e.target.style.display = "none";
+					}}
+				/>
+			) : (
+				<div
+					style={{
+						width: isMobile ? 56 : 48,
+						height: isMobile ? 56 : 48,
+						borderRadius: 10,
+						background: "#e8e3ff",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						marginBottom: 6,
+						fontSize: isMobile ? 22 : 20,
+					}}
+				>
+					📱
+				</div>
+			)}
+
+			<div
+				style={{
+					fontSize: isMobile ? 12 : 11,
+					fontWeight: 600,
+					color: "#333",
+					lineHeight: 1.25,
+					wordBreak: "break-word",
+				}}
+			>
+				{item.name}
+			</div>
+
+			{item.brand && (
+				<div style={{ fontSize: isMobile ? 11 : 10, color: "#888", marginTop: 3 }}>
+					{item.brand}
+				</div>
+			)}
 		</div>
 	);
 }
 
 // ── Карточка материала ────────────────────────────────────────────────────────
-function MaterialCard({ item, selected, onSelect }) {
+function MaterialCard({ item, selected, onSelect, isMobile }) {
 	const isSelected = selected?.id === item.id;
+
 	return (
 		<div
 			key={item.id}
@@ -174,38 +335,92 @@ function MaterialCard({ item, selected, onSelect }) {
 			style={{
 				cursor: "pointer",
 				border: `2px solid ${isSelected ? "#00b894" : "#e8e8e8"}`,
-				borderRadius: 10, padding: "8px 6px",
+				borderRadius: 12,
+				padding: isMobile ? "10px 8px" : "8px 6px",
 				background: isSelected ? "#eafaf6" : "#fafafa",
-				textAlign: "center", transition: "all 0.15s",
-				userSelect: "none", position: "relative",
-				height: 110, display: "flex", flexDirection: "column",
-				alignItems: "center", justifyContent: "center",
+				textAlign: "center",
+				transition: "all 0.15s",
+				userSelect: "none",
+				position: "relative",
+				minHeight: isMobile ? 120 : 110,
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				justifyContent: "center",
 			}}
 		>
-			{isSelected && <CheckCircleOutlined style={{ position: "absolute", top: 4, right: 4, color: "#00b894", fontSize: 12 }} />}
-			{item.imageUrl ? (
-				<img src={item.imageUrl} alt={item.name}
-					style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, marginBottom: 4 }}
-					onError={(e) => { e.target.style.display = "none"; }} />
-			) : (
-				<div style={{
-					width: 48, height: 48, borderRadius: 6,
-					background: "linear-gradient(135deg, #a29bfe, #6c5ce7)",
-					display: "flex", alignItems: "center", justifyContent: "center",
-					marginBottom: 4, fontSize: 18, color: "#fff"
-				}}>🛡</div>
+			{isSelected && (
+				<CheckCircleOutlined
+					style={{ position: "absolute", top: 6, right: 6, color: "#00b894", fontSize: 14 }}
+				/>
 			)}
-			<div style={{ fontSize: 11, fontWeight: 600, color: "#333", lineHeight: 1.2, wordBreak: "break-word" }}>{item.name}</div>
+
+			{item.imageUrl ? (
+				<img
+					src={item.imageUrl}
+					alt={item.name}
+					style={{
+						width: isMobile ? 56 : 48,
+						height: isMobile ? 56 : 48,
+						objectFit: "cover",
+						borderRadius: 8,
+						marginBottom: 6,
+					}}
+					onError={(e) => {
+						e.target.style.display = "none";
+					}}
+				/>
+			) : (
+				<div
+					style={{
+						width: isMobile ? 56 : 48,
+						height: isMobile ? 56 : 48,
+						borderRadius: 8,
+						background: "linear-gradient(135deg, #a29bfe, #6c5ce7)",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						marginBottom: 6,
+						fontSize: isMobile ? 20 : 18,
+						color: "#fff",
+					}}
+				>
+					🛡
+				</div>
+			)}
+
+			<div
+				style={{
+					fontSize: isMobile ? 12 : 11,
+					fontWeight: 600,
+					color: "#333",
+					lineHeight: 1.25,
+					wordBreak: "break-word",
+				}}
+			>
+				{item.name}
+			</div>
+
 			{item.price != null && (
-				<div style={{ fontSize: 10, color: "#00b894", marginTop: 2, fontWeight: 600 }}>{item.price} сом</div>
+				<div
+					style={{
+						fontSize: isMobile ? 11 : 10,
+						color: "#00b894",
+						marginTop: 3,
+						fontWeight: 700,
+					}}
+				>
+					{item.price} сом
+				</div>
 			)}
 		</div>
 	);
 }
 
 // ── Карточка типа резки ───────────────────────────────────────────────────────
-function ArmorCard({ item, selected, onSelect }) {
+function ArmorCard({ item, selected, onSelect, isMobile }) {
 	const isSelected = selected?.id === item.id;
+
 	return (
 		<div
 			key={item.id}
@@ -213,27 +428,69 @@ function ArmorCard({ item, selected, onSelect }) {
 			style={{
 				cursor: "pointer",
 				border: `2px solid ${isSelected ? "#fdcb6e" : "#e8e8e8"}`,
-				borderRadius: 10, padding: "8px 6px",
+				borderRadius: 12,
+				padding: isMobile ? "10px 8px" : "8px 6px",
 				background: isSelected ? "#fffbef" : "#fafafa",
-				textAlign: "center", transition: "all 0.15s",
-				userSelect: "none", position: "relative",
-				height: 110, display: "flex", flexDirection: "column",
-				alignItems: "center", justifyContent: "center",
+				textAlign: "center",
+				transition: "all 0.15s",
+				userSelect: "none",
+				position: "relative",
+				minHeight: isMobile ? 120 : 110,
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				justifyContent: "center",
 			}}
 		>
-			{isSelected && <CheckCircleOutlined style={{ position: "absolute", top: 4, right: 4, color: "#fdcb6e", fontSize: 12 }} />}
-			<div style={{
-				width: 44, height: 44, borderRadius: "50%",
-				background: isSelected ? "#fdcb6e" : "#eee",
-				display: "flex", alignItems: "center", justifyContent: "center",
-				marginBottom: 6, fontSize: 20, transition: "background 0.15s"
-			}}>✂️</div>
-			<div style={{ fontSize: 11, fontWeight: 600, color: "#333", lineHeight: 1.2, wordBreak: "break-word" }}>{item.name}</div>
+			{isSelected && (
+				<CheckCircleOutlined
+					style={{ position: "absolute", top: 6, right: 6, color: "#fdcb6e", fontSize: 14 }}
+				/>
+			)}
+
+			<div
+				style={{
+					width: isMobile ? 52 : 44,
+					height: isMobile ? 52 : 44,
+					borderRadius: "50%",
+					background: isSelected ? "#fdcb6e" : "#eee",
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
+					marginBottom: 6,
+					fontSize: isMobile ? 22 : 20,
+					transition: "background 0.15s",
+				}}
+			>
+				✂️
+			</div>
+
+			<div
+				style={{
+					fontSize: isMobile ? 12 : 11,
+					fontWeight: 600,
+					color: "#333",
+					lineHeight: 1.25,
+					wordBreak: "break-word",
+				}}
+			>
+				{item.name}
+			</div>
+
 			{item.description && (
-				<div style={{
-					fontSize: 10, color: "#999", marginTop: 2, overflow: "hidden",
-					textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120
-				}}>{item.description}</div>
+				<div
+					style={{
+						fontSize: isMobile ? 11 : 10,
+						color: "#999",
+						marginTop: 3,
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+						maxWidth: "100%",
+					}}
+				>
+					{item.description}
+				</div>
 			)}
 		</div>
 	);
@@ -241,6 +498,7 @@ function ArmorCard({ item, selected, onSelect }) {
 
 // ── Основной компонент ────────────────────────────────────────────────────────
 export default function CuttingOrdersPage() {
+	const isMobile = useIsMobile();
 
 	const { data: materials = [] } = useGetMaterialsQuery();
 	const { data: armorTypes = [] } = useGetArmorTypesQuery();
@@ -250,7 +508,7 @@ export default function CuttingOrdersPage() {
 	const [createMaterial] = useCreateMaterialMutation();
 	const [createArmorType] = useCreateArmorTypeMutation();
 	const [createDeviceType] = useCreateDeviceTypeMutation();
-
+	const [nuseWarranty] = useUseWarrantyMutation();
 	const { data: cuttingJobs = [], isLoading } = useGetOrdersQuery();
 	const [createCuttingJob] = useCreateCuttingJobMutation();
 	const [createOrder] = useCreateOrderMutation();
@@ -300,25 +558,29 @@ export default function CuttingOrdersPage() {
 
 	// ── Preview ──────────────────────────────────────────────────────────────
 	const { data: cuttingJobPreview } = usePreviewCuttingJobQuery(
-		{ materialId: selectedMaterial?.id, cuttingTypeId: selectedArmor?.id, deviceTypeId: selectedDevice?.id },
+		{
+			materialId: selectedMaterial?.id,
+			cuttingTypeId: selectedArmor?.id,
+			deviceTypeId: selectedDevice?.id,
+		},
 		{ skip: !selectedMaterial?.id || !selectedArmor?.id || !selectedDevice?.id }
 	);
 
 	// ── Авторасчёт суммы ─────────────────────────────────────────────────────
-	// Авторасчёт суммы
 	useEffect(() => {
-		if (manualSumma) return; // Если пользователь ввел сумму вручную, не пересчитываем
-		const base = (cuttingJobPreview?.price ?? 0) * quantity; // Базовая сумма
-		if (!base) { setSumma(undefined); return; }
-
-		// Вычисляем сумму с учетом скидки
+		if (manualSumma) return;
+		const base = (cuttingJobPreview?.price ?? 0) * quantity;
+		if (!base) {
+			setSumma(undefined);
+			return;
+		}
 		const discountedSum = calcDiscountedAmount(base, selectedDiscount);
-		setSumma(discountedSum); // Устанавливаем итоговую сумму
+		setSumma(discountedSum);
 	}, [cuttingJobPreview, quantity, selectedDiscount, manualSumma]);
 
-
-	useEffect(() => { setManualSumma(false); },
-		[selectedMaterial, selectedArmor, selectedDevice, selectedDiscount]);
+	useEffect(() => {
+		setManualSumma(false);
+	}, [selectedMaterial, selectedArmor, selectedDevice, selectedDiscount]);
 
 	const baseSumma = useMemo(() => {
 		if (!cuttingJobPreview?.price) return undefined;
@@ -329,34 +591,60 @@ export default function CuttingOrdersPage() {
 		if (!baseSumma || !selectedDiscount) return 0;
 
 		if (selectedDiscount.type === "PRICE_OVERRIDE") {
-			return baseSumma - selectedDiscount.value; // Обновлено: вычитаем фиксированную цену из базовой
+			return baseSumma - selectedDiscount.value;
 		}
 
 		return baseSumma - calcDiscountedAmount(baseSumma, selectedDiscount);
 	}, [baseSumma, selectedDiscount]);
 
-
 	// ── Создание новых типов ─────────────────────────────────────────────────
 	const openCreateTypeModal = (type) => {
-		setCurrentType(type); setNewTypeName(""); setIsCreateTypeModalOpen(true);
+		setCurrentType(type);
+		setNewTypeName("");
+		setDeviceBrand("");
+		setMaterialBarcode("");
+		setMaterialType("");
+		setMaterialThickness(undefined);
+		setMaterialPrice(undefined);
+		setArmorDescription("");
+		setIsCreateTypeModalOpen(true);
 	};
 
 	const handleCreateType = async () => {
 		try {
+			if (!newTypeName?.trim()) {
+				message.error("Введите название");
+				return;
+			}
+
 			if (currentType === "material") {
 				await createMaterial({
-					name: newTypeName, barcode: materialBarcode || "",
-					type: materialType || undefined, thickness: materialThickness || undefined,
-					price: materialPrice || 0, isActive: true,
+					name: newTypeName,
+					barcode: materialBarcode || "",
+					type: materialType || undefined,
+					thickness: materialThickness || undefined,
+					price: materialPrice || 0,
+					isActive: true,
 				}).unwrap();
 			} else if (currentType === "armor") {
-				await createArmorType({ name: newTypeName, description: armorDescription || undefined, isActive: true }).unwrap();
+				await createArmorType({
+					name: newTypeName,
+					description: armorDescription || undefined,
+					isActive: true,
+				}).unwrap();
 			} else if (currentType === "device") {
-				await createDeviceType({ name: newTypeName, brand: deviceBrand || undefined, isActive: true }).unwrap();
+				await createDeviceType({
+					name: newTypeName,
+					brand: deviceBrand || undefined,
+					isActive: true,
+				}).unwrap();
 			}
+
 			message.success("Создано успешно!");
 			setIsCreateTypeModalOpen(false);
-		} catch { message.error("Ошибка при создании"); }
+		} catch {
+			message.error("Ошибка при создании");
+		}
 	};
 
 	// ── Payload заказа ───────────────────────────────────────────────────────
@@ -367,29 +655,31 @@ export default function CuttingOrdersPage() {
 		clientName: clientName || undefined,
 		clientPhone,
 		clientEmail: clientEmail || undefined,
-		materialId: selectedMaterial?.id,   // ✅ ДОБАВЛЕНО — материал
-		// Скидка: по rule или по id
+		materialId: selectedMaterial?.id,
 		...(selectedDiscount?.rule && selectedDiscount.rule !== "MANUAL"
 			? { discountRule: selectedDiscount.rule }
 			: selectedDiscount?.id
 				? { discountId: selectedDiscount.id }
 				: {}),
-		// Сумма (если ручная или PRICE_OVERRIDE)
 		...(manualSumma || selectedDiscount?.type === "PRICE_OVERRIDE" ? { summa } : {}),
 	});
 
-
 	const handleCreateClick = () => {
-		if (!selectedMaterial || !selectedArmor || !selectedDevice || !clientPhone)
+		if (!selectedMaterial || !selectedArmor || !selectedDevice || !clientPhone) {
 			return message.error("Заполните все обязательные поля!");
+		}
 		cuttingJobPreview?.id ? setIsModalOpen(true) : setIsFileModalOpen(true);
 	};
 
 	const handleConfirmOrder = async () => {
 		try {
 			await createOrder(buildOrderPayload(cuttingJobPreview.id)).unwrap();
-			message.success("Резка создана!"); setIsModalOpen(false); resetForm();
-		} catch { message.error("Ошибка создания резки"); }
+			message.success("Резка создана!");
+			setIsModalOpen(false);
+			resetForm();
+		} catch {
+			message.error("Ошибка создания резки");
+		}
 	};
 
 	const handleCreateCuttingJobWithFile = async () => {
@@ -399,76 +689,121 @@ export default function CuttingOrdersPage() {
 			fd.append("cuttingTypeId", selectedArmor?.id);
 			fd.append("deviceTypeId", selectedDevice?.id);
 			fd.append("price", price);
-			if (fileList.length > 0) fd.append("file", fileList[0].originFileObj);
+
+			if (fileList.length > 0) {
+				fd.append("file", fileList[0].originFileObj);
+			}
+
 			const newJob = await createCuttingJob(fd).unwrap();
 			message.success("Задание создано!");
-			setIsFileModalOpen(false); setFileList([]);
+
+			setIsFileModalOpen(false);
+			setFileList([]);
+
 			await createOrder(buildOrderPayload(newJob.id)).unwrap();
-			message.success("Резка создана!"); resetForm();
-		} catch { message.error("Ошибка"); }
+			message.success("Резка создана!");
+			resetForm();
+		} catch {
+			message.error("Ошибка");
+		}
 	};
 
 	const handleDefect = async () => {
 		if (!defectRecord) return;
+
 		try {
 			await changeOrderStatus({ id: defectRecord.id, status: "DEFECT" }).unwrap();
 			message.success("Помечено как брак");
-			setIsDefectModalOpen(false); setDefectRecord(null);
-		} catch { message.error("Ошибка"); }
-	};
-
-	const handleRecreate = async (record) => {
-		try {
-			await createOrder({
-				cuttingJobId: record.cuttingJob.id, quantity: 1,
-				clientName: record.client?.name, clientPhone: record.client?.phone,
-				clientEmail: record.client?.email,
-				...(record.discount?.rule && record.discount.rule !== "MANUAL"
-					? { discountRule: record.discount.rule }
-					: record.discount?.id ? { discountId: record.discount.id } : {}),
-				summa: record.finalAmount,
-			}).unwrap();
-			message.success("Заказ повторно создан!");
-		} catch { message.error("Ошибка при повторном создании"); }
+			setIsDefectModalOpen(false);
+			setDefectRecord(null);
+		} catch {
+			message.error("Ошибка");
+		}
 	};
 
 	const handleStatusChange = async (id, status) => {
 		try {
 			await changeOrderStatus({ id, status }).unwrap();
 			message.success(`Статус: ${STATUS_LABEL[status] ?? status}`);
-		} catch { message.error("Ошибка"); }
-	};
-
-	const handleUseWarranty = async () => {
-		const warrantyDiscount = discounts.find(d => d.name === "Гарантийная оклейка 365");
-		if (warrantyDiscount) {
-			setSelectedDiscount(warrantyDiscount);
-			message.success("Гарантия 365 дней применена!");
-		} else {
-			message.error("Гарантия не доступна.");
+		} catch {
+			message.error("Ошибка");
 		}
 	};
 
-	// В вашем рендере добавьте кнопку
-
-
 	const resetForm = () => {
-		setSelectedMaterial(null); setSelectedArmor(null);
-		setSelectedDevice(null); setSelectedDiscount(null);
-		setQuantity(1); setSumma(undefined); setNotes("");
-		setClientPhone(""); setClientName(""); setClientEmail("");
-		setManualSumma(false); setPrice(0);
+		setSelectedMaterial(null);
+		setSelectedArmor(null);
+		setSelectedDevice(null);
+		setSelectedDiscount(null);
+		setQuantity(1);
+		setSumma(undefined);
+		setNotes("");
+		setClientPhone("");
+		setClientName("");
+		setClientEmail("");
+		setManualSumma(false);
+		setPrice(0);
+	};
+
+	const handleRepeatFromDefect = async () => {
+		if (!defectRecord) return;
+
+		try {
+			await changeOrderStatus({ id: defectRecord.id, status: "DEFECT" }).unwrap();
+
+			const payload = {
+				cuttingJobId: defectRecord.cuttingJob?.id,
+				quantity: defectRecord.quantity ?? 1,
+				notes: defectRecord.notes || "Повторная оклейка после брака",
+				clientName: defectRecord.client?.name || undefined,
+				clientPhone: defectRecord.client?.phone || "",
+				clientEmail: defectRecord.client?.email || undefined,
+				materialId: defectRecord.cuttingJob?.material?.id,
+				summa: defectRecord.finalAmount,
+				isDefectReworkOrder: true,
+				parentOrderId: defectRecord.id,
+			};
+
+			await createOrder(payload).unwrap();
+
+			message.success("Создана повторная оклейка");
+			setIsDefectModalOpen(false);
+			setDefectRecord(null);
+		} catch (e) {
+			message.error(e?.data?.message || "Ошибка при создании повторной оклейки");
+		}
 	};
 
 	// ── Тег статуса гарантии ─────────────────────────────────────────────────
-	// ✅ SafetyCertificateOutlined вместо ShieldOutlined
 	const warrantyStatusTag = (order) => {
 		if (!order.createdAt) return null;
+
+		if (order.isWarrantyOrder) {
+			return (
+				<Tag color="purple" icon={<SafetyCertificateOutlined />}>
+					Гарантийная оклейка
+				</Tag>
+			);
+		}
+
 		const days = Math.floor((Date.now() - new Date(order.createdAt)) / 86400000);
-		if (order.warrantyUsed)
-			return <Tag color="red" icon={<CloseCircleOutlined />}>Гарантия использована</Tag>;
-		if (days > 365)
-			return <Tag color="default" icon={<ExclamationCircleOutlined />}>Истекла ({days} дн.)</Tag>;
+
+		if (order.warrantyUsed) {
+			return (
+				<Tag color="red" icon={<CloseCircleOutlined />}>
+					Гарантия уже использована
+				</Tag>
+			);
+		}
+
+		if (days > 365) {
+			return (
+				<Tag color="default" icon={<ExclamationCircleOutlined />}>
+					Истекла ({days} дн.)
+				</Tag>
+			);
+		}
+
 		return (
 			<Tag color="green" icon={<SafetyCertificateOutlined />}>
 				Активна ({365 - days} дн. осталось)
@@ -484,96 +819,147 @@ export default function CuttingOrdersPage() {
 		{ title: "Тип резки", dataIndex: ["cuttingJob", "armorType", "name"], key: "armor" },
 		{ title: "Кол-во", dataIndex: "quantity", width: 60 },
 		{
-			title: "Сумма", key: "amount",
+			title: "Сумма",
+			key: "amount",
 			render: (_, r) => (
 				<Space direction="vertical" size={0}>
-					{r.discount && <span style={{ textDecoration: "line-through", color: "#999", fontSize: 11 }}>{r.totalAmount} сом</span>}
+					{r.discount && (
+						<span style={{ textDecoration: "line-through", color: "#999", fontSize: 11 }}>
+							{r.totalAmount} сом
+						</span>
+					)}
 					<strong>{r.finalAmount} сом</strong>
 				</Space>
 			),
 		},
 		{
-			title: "Скидка", key: "discount",
-			render: (_, r) => r.discount
-				? <Tooltip title={r.discount.description}><Tag color="volcano" icon={<TagOutlined />}>{RULE_LABEL[r.discount.rule] ?? r.discount.name}</Tag></Tooltip>
-				: "—",
+			title: "Скидка",
+			key: "discount",
+			render: (_, r) =>
+				r.discount ? (
+					<Tooltip title={r.discount.description}>
+						<Tag color="volcano" icon={<TagOutlined />}>
+							{RULE_LABEL[r.discount.rule] ?? r.discount.name}
+						</Tag>
+					</Tooltip>
+				) : (
+					"—"
+				),
 		},
 		{
-			title: "Статус", key: "status",
-			render: (_, r) => <Tag color={STATUS_COLOR[r.status] ?? "default"}>{STATUS_LABEL[r.status] ?? r.status}</Tag>,
-		},
-		{
-			title: "Действия", key: "actions",
+			title: "Статус",
+			key: "status",
 			render: (_, r) => (
-				<Space>
+				<Tag color={STATUS_COLOR[r.status] ?? "default"}>
+					{STATUS_LABEL[r.status] ?? r.status}
+				</Tag>
+			),
+		},
+		{
+			title: "Действия",
+			key: "actions",
+			render: (_, r) => (
+				<Space wrap>
 					{r.status !== "DONE" && r.status !== "DEFECT" && (
 						<>
-							<Button type="primary" size="small" onClick={() => handleStatusChange(r.id, "DONE")}>Провести</Button>
-							<Button danger size="small" onClick={() => { setDefectRecord(r); setIsDefectModalOpen(true); }}>Брак</Button>
+							<Button
+								type="primary"
+								size="small"
+								onClick={() => handleStatusChange(r.id, "DONE")}
+							>
+								Провести
+							</Button>
+							<Button
+								danger
+								size="small"
+								onClick={() => {
+									setDefectRecord(r);
+									setIsDefectModalOpen(true);
+								}}
+							>
+								Брак
+							</Button>
 						</>
-					)}
-					{r.status === "DEFECT" && (
-						<Button type="dashed" size="small" icon={<ReloadOutlined />} onClick={() => handleRecreate(r)}>Повторить</Button>
 					)}
 				</Space>
 			),
 		},
 	];
 
-	// ── Рендер ───────────────────────────────────────────────────────────────
 	return (
-		<div style={{ padding: "16px 20px" }}>
+		<div style={{ padding: isMobile ? "12px 12px 24px" : "16px 20px" }}>
+			<div
+				style={{
+					display: "flex",
+					alignItems: isMobile ? "stretch" : "center",
+					justifyContent: "space-between",
+					marginBottom: 16,
+					flexDirection: isMobile ? "column" : "row",
+					gap: 10,
+				}}
+			>
+				<h2 style={{ margin: 0, fontSize: isMobile ? 22 : 26 }}>✂️ Создать резку</h2>
 
-			{/* Заголовок */}
-			<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-				<h2 style={{ margin: 0 }}>✂️ Создать резку</h2>
-				{/* ✅ SafetyCertificateOutlined вместо ShieldOutlined */}
 				<Button
 					icon={<SafetyCertificateOutlined />}
-					style={{ background: "#6c5ce7", color: "#fff", border: "none", borderRadius: 8 }}
+					style={{
+						background: "#6c5ce7",
+						color: "#fff",
+						border: "none",
+						borderRadius: 10,
+						height: isMobile ? 44 : undefined,
+						width: isMobile ? "100%" : "auto",
+					}}
 					onClick={() => setWarrantyDrawerOpen(true)}
 				>
 					Гарантия 365 дней
 				</Button>
 			</div>
 
-			{/* Карточки устройств */}
 			<CardGrid
 				title="📱 Устройство *"
 				data={deviceTypes.filter((d) => d.isActive !== false)}
 				selected={selectedDevice}
 				onSelect={setSelectedDevice}
 				onAddNew={() => openCreateTypeModal("device")}
-				renderCard={(item, sel, onSel) => <DeviceCard key={item.id} item={item} selected={sel} onSelect={onSel} />}
+				isMobile={isMobile}
+				renderCard={(item, sel, onSel, mobile) => (
+					<DeviceCard key={item.id} item={item} selected={sel} onSelect={onSel} isMobile={mobile} />
+				)}
 			/>
 
-			{/* Карточки материалов */}
 			<CardGrid
 				title="🛡 Материал *"
 				data={materials.filter((m) => m.isActive !== false)}
 				selected={selectedMaterial}
 				onSelect={setSelectedMaterial}
 				onAddNew={() => openCreateTypeModal("material")}
-				renderCard={(item, sel, onSel) => <MaterialCard key={item.id} item={item} selected={sel} onSelect={onSel} />}
+				isMobile={isMobile}
+				renderCard={(item, sel, onSel, mobile) => (
+					<MaterialCard key={item.id} item={item} selected={sel} onSelect={onSel} isMobile={mobile} />
+				)}
 			/>
 
-			{/* Карточки типов резки */}
 			<CardGrid
 				title="✂️ Тип резки *"
 				data={armorTypes.filter((a) => a.isActive !== false)}
 				selected={selectedArmor}
 				onSelect={setSelectedArmor}
 				onAddNew={() => openCreateTypeModal("armor")}
-				renderCard={(item, sel, onSel) => <ArmorCard key={item.id} item={item} selected={sel} onSelect={onSel} />}
+				isMobile={isMobile}
+				renderCard={(item, sel, onSel, mobile) => (
+					<ArmorCard key={item.id} item={item} selected={sel} onSelect={onSel} isMobile={mobile} />
+				)}
 			/>
 
 			<Divider style={{ margin: "12px 0" }} />
 
-			{/* Скидка + Кол-во + Сумма */}
 			<Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
 				<Col xs={24} sm={12} md={6}>
 					<Select
-						showSearch allowClear
+						size="large"
+						showSearch
+						allowClear
 						placeholder="Скидка (опционально)"
 						style={{ width: "100%" }}
 						value={selectedDiscount?.id ?? null}
@@ -583,33 +969,53 @@ export default function CuttingOrdersPage() {
 							setManualSumma(false);
 						}}
 					>
-						{discounts.filter((d) => d.isActive).map((d) => (
-							<Option key={d.id} value={d.id}>
-								<Space>
-									<TagOutlined />
-									{RULE_LABEL[d.rule] ?? d.name}
-									<span style={{ color: "#999", fontSize: 12 }}>
-										{d.type === "PERCENT" ? `−${d.value}%` : d.type === "PRICE_OVERRIDE" ? `= ${d.value} сом` : `−${d.value} сом`}
-									</span>
-								</Space>
-							</Option>
-						))}
+						{discounts
+							.filter((d) => d.isActive)
+							.map((d) => (
+								<Option key={d.id} value={d.id}>
+									<Space>
+										<TagOutlined />
+										{d.name ?? RULE_LABEL[d.rule]}
+										<span style={{ color: "#999", fontSize: 12 }}>
+											{d.type === "PERCENT"
+												? `−${d.value}%`
+												: d.type === "PRICE_OVERRIDE"
+													? `= ${d.value} сом`
+													: `−${d.value} сом`}
+										</span>
+									</Space>
+								</Option>
+							))}
 					</Select>
 				</Col>
+
 				<Col xs={12} sm={6} md={3}>
-					<InputNumber min={1} value={quantity} onChange={(v) => setQuantity(v ?? 1)}
-						placeholder="Кол-во" style={{ width: "100%" }} />
+					<InputNumber
+						size="large"
+						min={1}
+						value={quantity}
+						onChange={(v) => setQuantity(v ?? 1)}
+						placeholder="Кол-во"
+						style={{ width: "100%" }}
+					/>
 				</Col>
+
 				<Col xs={12} sm={6} md={4}>
 					<InputNumber
+						size="large"
 						value={summa}
-						onChange={(v) => { setSumma(v); setManualSumma(true); }}
+						onChange={(v) => {
+							setSumma(v);
+							setManualSumma(true);
+						}}
 						placeholder="Итого (сом)"
 						style={{ width: "100%" }}
 						addonAfter={
-							selectedDiscount && discountAmount > 0
-								? <Tooltip title={`Скидка: −${Math.round(discountAmount)} сом`}><PercentageOutlined style={{ color: "#f5222d" }} /></Tooltip>
-								: null
+							selectedDiscount && discountAmount > 0 ? (
+								<Tooltip title={`Скидка: −${Math.round(discountAmount)} сом`}>
+									<PercentageOutlined style={{ color: "#f5222d" }} />
+								</Tooltip>
+							) : null
 						}
 					/>
 					{selectedDiscount && discountAmount > 0 && (
@@ -618,34 +1024,58 @@ export default function CuttingOrdersPage() {
 						</div>
 					)}
 				</Col>
+
 				<Col xs={24} sm={6} md={3}>
-					<Button type="primary" onClick={handleCreateClick} block style={{ background: "#6c5ce7", border: "none" }}>
+					<Button
+						type="primary"
+						onClick={handleCreateClick}
+						block
+						size="large"
+						style={{ background: "#6c5ce7", border: "none", height: 44 }}
+					>
 						Начать резку
 					</Button>
 				</Col>
 			</Row>
 
-			{/* Клиент */}
 			<Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
 				<Col xs={24} sm={12} md={6}>
-					<Input placeholder="Телефон клиента *" value={clientPhone}
-						onChange={(e) => setClientPhone(e.target.value)} />
+					<Input
+						size="large"
+						placeholder="Телефон клиента *"
+						value={clientPhone}
+						onChange={(e) => setClientPhone(e.target.value)}
+					/>
 				</Col>
+
 				<Col xs={24} sm={12} md={6}>
-					<Input placeholder="Имя клиента (опционально)" value={clientName}
-						onChange={(e) => setClientName(e.target.value)} />
+					<Input
+						size="large"
+						placeholder="Имя клиента (опционально)"
+						value={clientName}
+						onChange={(e) => setClientName(e.target.value)}
+					/>
 				</Col>
+
 				<Col xs={24} sm={12} md={6}>
-					<Input placeholder="Email (опционально)" value={clientEmail}
-						onChange={(e) => setClientEmail(e.target.value)} />
+					<Input
+						size="large"
+						placeholder="Email (опционально)"
+						value={clientEmail}
+						onChange={(e) => setClientEmail(e.target.value)}
+					/>
 				</Col>
+
 				<Col xs={24} md={12}>
-					<Input.TextArea placeholder="Заметки..." value={notes}
-						onChange={(e) => setNotes(e.target.value)} autoSize={{ minRows: 1, maxRows: 3 }} />
+					<Input.TextArea
+						placeholder="Заметки..."
+						value={notes}
+						onChange={(e) => setNotes(e.target.value)}
+						autoSize={{ minRows: isMobile ? 3 : 1, maxRows: 4 }}
+					/>
 				</Col>
 			</Row>
 
-			{/* Выбранные параметры */}
 			{(selectedDevice || selectedMaterial || selectedArmor) && (
 				<Alert
 					type="info"
@@ -661,73 +1091,119 @@ export default function CuttingOrdersPage() {
 				/>
 			)}
 
-			{/* Таблица заказов */}
 			<Divider orientation="left">Заказы</Divider>
+
 			<Table
 				dataSource={cuttingJobs}
 				columns={columns}
 				rowKey="id"
-				size="small"
+				size={isMobile ? "middle" : "small"}
 				loading={isLoading}
 				bordered
-				scroll={{ x: true }}
-				pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `Всего: ${t}` }}
+				scroll={{ x: 900 }}
+				pagination={{
+					pageSize: 20,
+					showSizeChanger: true,
+					showTotal: (t) => `Всего: ${t}`,
+				}}
 			/>
 
-			{/* Модалка: подтверждение */}
-			<Modal title="Подтвердите создание резки" open={isModalOpen}
-				onOk={handleConfirmOrder} onCancel={() => setIsModalOpen(false)}
-				okText="Создать" cancelText="Отмена">
+			<Modal
+				title="Подтвердите создание резки"
+				open={isModalOpen}
+				width={isMobile ? "95%" : 520}
+				onOk={handleConfirmOrder}
+				onCancel={() => setIsModalOpen(false)}
+				okText="Создать"
+				cancelText="Отмена"
+			>
 				<Space direction="vertical" style={{ width: "100%" }}>
 					<Tag color="purple">📱 {selectedDevice?.name}</Tag>
 					<Tag color="green">🛡 {selectedMaterial?.name}</Tag>
 					<Tag color="gold">✂️ {selectedArmor?.name}</Tag>
-					<p>Количество: <strong>{quantity}</strong></p>
-					<p>Сумма: {selectedDiscount && discountAmount > 0 ? (
-	<>
-		{selectedDiscount.type === "PRICE_OVERRIDE" ? (
-			<>
-				<strong style={{ color: "#f5222d" }}>{selectedDiscount.value} сом</strong>
-				<Tag color="volcano" style={{ marginLeft: 4 }}>{RULE_LABEL[selectedDiscount.rule] ?? selectedDiscount.name}</Tag>
-			</>
-		) : (
-			<>
-				<span style={{ textDecoration: "line-through", color: "#999" }}>{baseSumma} сом</span>{" "}
-				<strong style={{ color: "#f5222d" }}>{summa} сом</strong>
-				<Tag color="volcano" style={{ marginLeft: 4 }}>{RULE_LABEL[selectedDiscount.rule] ?? selectedDiscount.name}</Tag>
-			</>
-		)}
-	</>
-) : <strong>{summa} сом</strong>}</p>
-
+					<p>
+						Количество: <strong>{quantity}</strong>
+					</p>
+					<p>
+						Сумма:{" "}
+						{selectedDiscount && discountAmount > 0 ? (
+							<>
+								{selectedDiscount.type === "PRICE_OVERRIDE" ? (
+									<>
+										<strong style={{ color: "#f5222d" }}>
+											{selectedDiscount.value} сом
+										</strong>
+										<Tag color="volcano" style={{ marginLeft: 4 }}>
+											{RULE_LABEL[selectedDiscount.rule] ?? selectedDiscount.name}
+										</Tag>
+									</>
+								) : (
+									<>
+										<span style={{ textDecoration: "line-through", color: "#999" }}>
+											{baseSumma} сом
+										</span>{" "}
+										<strong style={{ color: "#f5222d" }}>{summa} сом</strong>
+										<Tag color="volcano" style={{ marginLeft: 4 }}>
+											{RULE_LABEL[selectedDiscount.rule] ?? selectedDiscount.name}
+										</Tag>
+									</>
+								)}
+							</>
+						) : (
+							<strong>{summa} сом</strong>
+						)}
+					</p>
 
 					<p>Телефон: {clientPhone}</p>
 					{clientName && <p>Имя: {clientName}</p>}
 				</Space>
 			</Modal>
 
-			{/* Модалка: новый job с файлом */}
-			<Modal title="Создать задание на резку" open={isFileModalOpen}
+			<Modal
+				title="Создать задание на резку"
+				open={isFileModalOpen}
+				width={isMobile ? "95%" : 520}
 				onOk={handleCreateCuttingJobWithFile}
-				onCancel={() => { setIsFileModalOpen(false); setFileList([]); }}
-				okText="Создать и резать" cancelText="Отмена">
+				onCancel={() => {
+					setIsFileModalOpen(false);
+					setFileList([]);
+				}}
+				okText="Создать и резать"
+				cancelText="Отмена"
+			>
 				<Row gutter={[16, 16]}>
 					<Col xs={24}>
-						<Upload beforeUpload={() => false} maxCount={1} fileList={fileList}
-							onChange={({ fileList: fl }) => setFileList(fl)}>
-							<Button icon={<UploadOutlined />}>Файл (опционально)</Button>
+						<Upload
+							beforeUpload={() => false}
+							maxCount={1}
+							fileList={fileList}
+							onChange={({ fileList: fl }) => setFileList(fl)}
+						>
+							<Button icon={<UploadOutlined />} size="large">
+								Файл (опционально)
+							</Button>
 						</Upload>
 					</Col>
+
 					<Col xs={24} sm={12}>
-						<InputNumber min={0} style={{ width: "100%" }} placeholder="Цена за единицу"
-							value={price} onChange={setPrice} />
+						<InputNumber
+							size="large"
+							min={0}
+							style={{ width: "100%" }}
+							placeholder="Цена за единицу"
+							value={price}
+							onChange={setPrice}
+						/>
 					</Col>
+
 					{selectedDiscount && (
 						<Col xs={24}>
 							<Tag color="volcano" icon={<TagOutlined />}>
 								{RULE_LABEL[selectedDiscount.rule] ?? selectedDiscount.name}:{" "}
-								{selectedDiscount.type === "PERCENT" ? `−${selectedDiscount.value}%`
-									: selectedDiscount.type === "PRICE_OVERRIDE" ? `= ${selectedDiscount.value} сом`
+								{selectedDiscount.type === "PERCENT"
+									? `−${selectedDiscount.value}%`
+									: selectedDiscount.type === "PRICE_OVERRIDE"
+										? `= ${selectedDiscount.value} сом`
 										: `−${selectedDiscount.value} сом`}
 							</Tag>
 						</Col>
@@ -735,48 +1211,130 @@ export default function CuttingOrdersPage() {
 				</Row>
 			</Modal>
 
-			{/* Модалка: брак */}
 			<Modal
 				title={<span style={{ color: "#f5222d" }}>⚠️ Пометить как брак</span>}
 				open={isDefectModalOpen}
-				onOk={handleDefect}
-				onCancel={() => { setIsDefectModalOpen(false); setDefectRecord(null); }}
-				okText="Подтвердить брак" okButtonProps={{ danger: true }}
-				cancelText="Отмена"
+				width={isMobile ? "95%" : 520}
+				onCancel={() => {
+					setIsDefectModalOpen(false);
+					setDefectRecord(null);
+				}}
+				footer={[
+					<Button
+						key="cancel"
+						onClick={() => {
+							setIsDefectModalOpen(false);
+							setDefectRecord(null);
+						}}
+					>
+						Отмена
+					</Button>,
+					<Button
+						key="repeat"
+						type="default"
+						style={{
+							background: "#6c5ce7",
+							color: "#fff",
+							border: "none",
+						}}
+						onClick={handleRepeatFromDefect}
+					>
+						Повторить
+					</Button>,
+					<Button
+						key="defect"
+						danger
+						type="primary"
+						onClick={handleDefect}
+					>
+						Подтвердить брак
+					</Button>,
+				]}
 			>
 				{defectRecord && (
 					<Space direction="vertical">
-						<p>Вы уверены, что хотите пометить этот заказ как <strong>брак</strong>?</p>
+						<p>
+							Вы уверены, что хотите пометить этот заказ как <strong>брак</strong>?
+						</p>
+
 						<Tag color="purple">📱 {defectRecord.cuttingJob?.deviceType?.name}</Tag>
 						<Tag color="green">🛡 {defectRecord.cuttingJob?.material?.name}</Tag>
+						<Tag color="gold">✂️ {defectRecord.cuttingJob?.armorType?.name}</Tag>
+
 						<p>Клиент: {defectRecord.client?.phone}</p>
 						<p>Сумма: {defectRecord.finalAmount} сом</p>
-						<p style={{ color: "#888", fontSize: 12 }}>После этого можно нажать «Повторить» для перерезки.</p>
+
+						<p style={{ color: "#888", fontSize: 12 }}>
+							Можно просто отметить заказ как брак, либо сразу создать повторную оклейку.
+						</p>
 					</Space>
 				)}
 			</Modal>
 
-			{/* Модалка: создание нового типа */}
-			<Modal title={`Создать новый: ${currentType}`} open={isCreateTypeModalOpen}
-				onOk={handleCreateType} onCancel={() => setIsCreateTypeModalOpen(false)}
-				okText="Создать" cancelText="Отмена">
-				<Input placeholder="Название *" value={newTypeName}
-					onChange={(e) => setNewTypeName(e.target.value)} style={{ marginBottom: 12 }} />
+			<Modal
+				title={`Создать новый: ${currentType}`}
+				open={isCreateTypeModalOpen}
+				width={isMobile ? "95%" : 520}
+				onOk={handleCreateType}
+				onCancel={() => setIsCreateTypeModalOpen(false)}
+				okText="Создать"
+				cancelText="Отмена"
+			>
+				<Input
+					size="large"
+					placeholder="Название *"
+					value={newTypeName}
+					onChange={(e) => setNewTypeName(e.target.value)}
+					style={{ marginBottom: 12 }}
+				/>
+
 				{currentType === "device" && (
-					<Input placeholder="Бренд (опционально)" value={deviceBrand}
-						onChange={(e) => setDeviceBrand(e.target.value)} />
+					<Input
+						size="large"
+						placeholder="Бренд (опционально)"
+						value={deviceBrand}
+						onChange={(e) => setDeviceBrand(e.target.value)}
+					/>
 				)}
+
 				{currentType === "material" && (
 					<Space direction="vertical" style={{ width: "100%" }}>
-						<Input placeholder="Штрихкод" value={materialBarcode} onChange={(e) => setMaterialBarcode(e.target.value)} />
-						<Input placeholder="Тип" value={materialType} onChange={(e) => setMaterialType(e.target.value)} />
-						<InputNumber placeholder="Толщина" value={materialThickness} onChange={setMaterialThickness} style={{ width: "100%" }} />
-						<InputNumber placeholder="Цена" value={materialPrice} onChange={setMaterialPrice} style={{ width: "100%" }} />
+						<Input
+							size="large"
+							placeholder="Штрихкод"
+							value={materialBarcode}
+							onChange={(e) => setMaterialBarcode(e.target.value)}
+						/>
+						<Input
+							size="large"
+							placeholder="Тип"
+							value={materialType}
+							onChange={(e) => setMaterialType(e.target.value)}
+						/>
+						<InputNumber
+							size="large"
+							placeholder="Толщина"
+							value={materialThickness}
+							onChange={setMaterialThickness}
+							style={{ width: "100%" }}
+						/>
+						<InputNumber
+							size="large"
+							placeholder="Цена"
+							value={materialPrice}
+							onChange={setMaterialPrice}
+							style={{ width: "100%" }}
+						/>
 					</Space>
 				)}
+
 				{currentType === "armor" && (
-					<Input placeholder="Описание" value={armorDescription}
-						onChange={(e) => setArmorDescription(e.target.value)} />
+					<Input
+						size="large"
+						placeholder="Описание"
+						value={armorDescription}
+						onChange={(e) => setArmorDescription(e.target.value)}
+					/>
 				)}
 			</Modal>
 
@@ -788,7 +1346,7 @@ export default function CuttingOrdersPage() {
 					</Space>
 				}
 				placement="right"
-				width={480}
+				width={isMobile ? "100%" : 480}
 				open={warrantyDrawerOpen}
 				onClose={() => {
 					setWarrantyDrawerOpen(false);
@@ -800,12 +1358,13 @@ export default function CuttingOrdersPage() {
 					<p style={{ color: "#666", margin: 0 }}>
 						Введите телефон клиента, чтобы проверить историю оклеек и статус гарантии.
 					</p>
+
 					<Input.Search
 						placeholder="Номер телефона"
 						value={warrantyPhone}
 						onChange={(e) => setWarrantyPhone(e.target.value)}
 						onSearch={(v) => setWarrantySearch(v)}
-						enterButton="Найти"
+						enterButton={<span style={{ padding: "0 8px" }}>Найти</span>}
 						size="large"
 						loading={historyLoading}
 					/>
@@ -817,24 +1376,36 @@ export default function CuttingOrdersPage() {
 					)}
 
 					{Array.isArray(clientHistory) && clientHistory.length > 0 && (() => {
-						// ✅ Проверяем: использовал ли клиент гарантию
-						const hasUsedWarranty = clientHistory.some(o => o.isWarrantyOrder);
+						const availableWarrantyOrders = clientHistory.filter((o) => {
+							const daysSince = Math.floor(
+								(Date.now() - new Date(o.createdAt)) / 86400000
+							);
+
+							return !o.isWarrantyOrder && !o.warrantyUsed && daysSince <= 365;
+						});
 
 						return (
 							<>
-								<div style={{
-									background: "#f0eeff", borderRadius: 10,
-									padding: "12px 16px", border: "1px solid #d9d0ff"
-								}}>
-									<div style={{ fontWeight: 700, fontSize: 15 }}>
-										История клиента
-									</div>
+								<div
+									style={{
+										background: "#f0eeff",
+										borderRadius: 10,
+										padding: "12px 16px",
+										border: "1px solid #d9d0ff",
+									}}
+								>
+									<div style={{ fontWeight: 700, fontSize: 15 }}>История клиента</div>
 									<div style={{ marginTop: 6 }}>
 										<Tag color="purple">Заказов: {clientHistory.length}</Tag>
-										{hasUsedWarranty
-											? <Tag color="red" icon={<CloseCircleOutlined />}>Гарантия использована</Tag>
-											: <Tag color="green" icon={<SafetyCertificateOutlined />}>Гарантия доступна</Tag>
-										}
+										{availableWarrantyOrders.length > 0 ? (
+											<Tag color="green" icon={<SafetyCertificateOutlined />}>
+												Есть доступные гарантии
+											</Tag>
+										) : (
+											<Tag color="default" icon={<ExclamationCircleOutlined />}>
+												Нет доступных гарантий
+											</Tag>
+										)}
 									</div>
 								</div>
 
@@ -846,27 +1417,46 @@ export default function CuttingOrdersPage() {
 											const daysSince = Math.floor(
 												(Date.now() - new Date(order.createdAt)) / 86400000
 											);
+
 											const isWithin14Days = daysSince <= 14;
 											const isWithin365Days = daysSince <= 365;
-											// ✅ Гарантию можно использовать только 1 раз
-											const canUseWarranty = !hasUsedWarranty && isWithin365Days;
-											// ✅ Брак можно поставить только в течение 14 дней после оклейки
-											const canMarkDefect = isWithin14Days && order.status !== "DEFECT";
+
+											const canUseWarranty =
+												!order.isWarrantyOrder &&
+												!order.warrantyUsed &&
+												isWithin365Days &&
+												order.status !== "DEFECT";
+
+											const canMarkDefect =
+												!order.isWarrantyOrder &&
+												isWithin14Days &&
+												order.status !== "DEFECT";
 
 											return {
 												color: order.isWarrantyOrder
 													? "purple"
 													: STATUS_COLOR[order.status] ?? "blue",
 												children: (
-													<div style={{
-														background: "#fafafa", borderRadius: 8,
-														padding: "8px 12px", border: "1px solid #eee", marginBottom: 4
-													}}>
-														{/* Заголовок */}
-														<div style={{
-															display: "flex", justifyContent: "space-between", alignItems: "center"
-														}}>
-															<strong style={{ fontSize: 13 }}>{order.deviceType ?? "—"}</strong>
+													<div
+														style={{
+															background: "#fafafa",
+															borderRadius: 8,
+															padding: "8px 12px",
+															border: "1px solid #eee",
+															marginBottom: 4,
+														}}
+													>
+														<div
+															style={{
+																display: "flex",
+																justifyContent: "space-between",
+																alignItems: "center",
+																gap: 8,
+															}}
+														>
+															<strong style={{ fontSize: 13 }}>
+																{order.deviceType ?? "—"}
+															</strong>
 															<span style={{ fontSize: 11, color: "#999" }}>
 																{order.createdAt
 																	? new Date(order.createdAt).toLocaleDateString("ru-RU")
@@ -874,11 +1464,11 @@ export default function CuttingOrdersPage() {
 															</span>
 														</div>
 
-														{/* Детали */}
 														<div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
-															Материал: {order.material ?? "—"} &nbsp;|&nbsp;
-															Тип: {order.armorType ?? "—"}
+															Материал: {order.material ?? "—"} &nbsp;|&nbsp; Тип:{" "}
+															{order.armorType ?? "—"}
 														</div>
+
 														<div style={{ fontSize: 12, color: "#666" }}>
 															Сумма: <strong>{order.finalAmount} сом</strong>
 															{order.isWarrantyOrder && (
@@ -888,7 +1478,6 @@ export default function CuttingOrdersPage() {
 															)}
 														</div>
 
-														{/* Статус */}
 														<div style={{ marginTop: 4 }}>
 															{warrantyStatusTag(order)}
 															<Tag
@@ -904,29 +1493,26 @@ export default function CuttingOrdersPage() {
 															)}
 														</div>
 
-														{/* Кнопки */}
 														<Space style={{ marginTop: 8 }} wrap>
-															{/* ✅ Гарантия — только 1 раз, в течение 365 дней */}
 															{canUseWarranty && (
 																<Button
 																	size="small"
 																	style={{
-																		background: "#6c5ce7", color: "#fff", border: "none"
+																		background: "#6c5ce7",
+																		color: "#fff",
+																		border: "none",
 																	}}
 																	icon={<SafetyCertificateOutlined />}
 																	onClick={async () => {
 																		try {
-																			await changeOrderStatus({
-																				id: order.id, status: "REWORK"
-																			}).unwrap();
-																			message.success(
-																				"Гарантия применена! Заказ отправлен на переделку."
-																			);
-																			// Сбрасываем поиск чтобы обновить данные
+																			await nuseWarranty(order.id).unwrap();
+																			message.success("Гарантийная оклейка создана");
 																			setWarrantySearch("");
 																			setTimeout(() => setWarrantySearch(warrantyPhone), 300);
-																		} catch {
-																			message.error("Ошибка применения гарантии");
+																		} catch (e) {
+																			message.error(
+																				e?.data?.message || "Ошибка применения гарантии"
+																			);
 																		}
 																	}}
 																>
@@ -934,7 +1520,6 @@ export default function CuttingOrdersPage() {
 																</Button>
 															)}
 
-															{/* ✅ Брак — только в течение 14 дней */}
 															{canMarkDefect && (
 																<Button
 																	danger
@@ -942,7 +1527,8 @@ export default function CuttingOrdersPage() {
 																	onClick={async () => {
 																		try {
 																			await changeOrderStatus({
-																				id: order.id, status: "DEFECT"
+																				id: order.id,
+																				status: "DEFECT",
 																			}).unwrap();
 																			message.success("Заказ помечен как брак");
 																			setWarrantySearch("");
@@ -954,13 +1540,6 @@ export default function CuttingOrdersPage() {
 																>
 																	Брак (в течение 14 дн.)
 																</Button>
-															)}
-
-															{/* ✅ Гарантия недоступна — информация */}
-															{hasUsedWarranty && !order.isWarrantyOrder && isWithin365Days && (
-																<Tag color="default" icon={<ExclamationCircleOutlined />}>
-																	Гарантия уже использована
-																</Tag>
 															)}
 														</Space>
 													</div>

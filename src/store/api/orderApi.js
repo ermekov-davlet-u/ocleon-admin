@@ -1,9 +1,9 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { mainURL } from '../../config';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQueryWithReauth } from './baseQuery';
 
 export const orderApi = createApi({
   reducerPath: 'orderApi',
-  baseQuery: fetchBaseQuery({ baseUrl: mainURL }), // замени на свой URL
+  baseQuery: baseQueryWithReauth, // с авторизацией и 401-редиректом
   tagTypes: ['CuttingOrder'],
   endpoints: (builder) => ({
     getOrders: builder.query({
@@ -45,6 +45,20 @@ export const orderApi = createApi({
       }),
       invalidatesTags: ['CuttingOrder'],
     }),
+    useWarranty: builder.mutation({
+      query: (id) => ({
+        url: `/cutting-orders/${id}/use-warranty`,
+        method: "POST",
+      }),
+      invalidatesTags: ["CuttingOrders"],
+    }),
+    useDefectRework: builder.mutation({
+      query: (id) => ({
+        url: `/cutting-orders/${id}/use-defect-rework`,
+        method: "POST",
+      }),
+      invalidatesTags: ["CuttingOrders"],
+    }),
   }),
 
 });
@@ -55,5 +69,7 @@ export const {
   useUpdateOrderMutation,
   useGetClientHistoryQuery,
   useDeleteOrderMutation,
-  useChangeOrderStatusMutation
+  useUseWarrantyMutation,
+  useChangeOrderStatusMutation,
+  useUseDefectReworkMutation,
 } = orderApi;

@@ -1,9 +1,9 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { mainURL } from '../../config';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQueryWithReauth } from './baseQuery';
 
 export const cuttingApi = createApi({
   reducerPath: 'cuttingApi',
-  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: ['CuttingJob', 'Material', 'DeviceType', 'CuttingType', 'User'],
   endpoints: (builder) => ({
     // ---------- Cutting Jobs ----------

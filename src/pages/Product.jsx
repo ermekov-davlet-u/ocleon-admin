@@ -107,7 +107,6 @@ export default function CuttingJobPage() {
 
   const columns = [
     { title: "ID", dataIndex: "id", width: 60, responsive: ["lg"] },
-    { title: "Материал", dataIndex: ["material", "name"] },
     { title: "Тип резки", dataIndex: ["armorType", "name"] },
     { title: "Устройство", dataIndex: ["deviceType", "name"] },
     { title: "Файл", dataIndex: ["filePath"] },

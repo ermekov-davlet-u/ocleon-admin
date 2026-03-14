@@ -1,10 +1,10 @@
 // store/api/armorTypesApi.js
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mainURL } from "../../config";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { baseQueryWithReauth } from "./baseQuery";
 
 export const armorTypesApi = createApi({
   reducerPath: "armorTypesApi",
-  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: ["ArmorType"],
   endpoints: (builder) => ({
     getArmorTypes: builder.query({

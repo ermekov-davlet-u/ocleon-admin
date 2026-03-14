@@ -7,6 +7,7 @@ import {
   ScissorOutlined,
   TeamOutlined,
   BankOutlined,
+  BookOutlined,
   TagsOutlined,
   SkinOutlined,
   BellOutlined,
@@ -187,7 +188,7 @@ function App() {
             { key: "/materials", icon: <AppstoreOutlined />, label: "Материалы" },
             { key: "/invoices", icon: <FileTextOutlined />, label: "Накладная" },
             { key: "/invoiceForm", icon: <FileTextOutlined />, label: "Приход товара" },
-            { key: "/cutting", icon: <ScissorOutlined />, label: "Резка" },
+            { key: "/order-visual", icon: <ScissorOutlined />, label: "Резка" },
             { key: "/employee", icon: <TeamOutlined />, label: "Работники" },
             { key: "/branches", icon: <BankOutlined />, label: "Филиалы" },
             { key: "/discount", icon: <BankOutlined />, label: "Скидки" },
@@ -195,7 +196,6 @@ function App() {
             { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
             { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
             { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
-            { key: "/booking", icon: <SkinOutlined />, label: "Бронирования" },
           ]}
         />
       </Sider>
@@ -259,9 +259,24 @@ function App() {
                 }}
               />
             </Tooltip>
+            <Tooltip title="Бронирование" placement="bottom">
+              <Button
+                type="text"
+                icon={<BookOutlined style={{ fontSize: 18 }} />}
+                onClick={() => navigate("/booking")}
+                style={{
+                  width: 40, height: 40,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#6366f1",
+                  borderRadius: 8,
+                  background: location.pathname === "/booking"
+                    ? "rgba(99,102,241,0.1)" : "transparent",
+                }}
+              />
+            </Tooltip>
 
             {/* Notifications */}
-            <Dropdown
+            {/* <Dropdown
               menu={{ items: notifMenuItems }}
               trigger={["click"]}
               placement="bottomRight"
@@ -282,7 +297,7 @@ function App() {
                   </Badge>
                 </Button>
               </Tooltip>
-            </Dropdown>
+            </Dropdown> */}
 
             {/* Divider */}
             <div style={{

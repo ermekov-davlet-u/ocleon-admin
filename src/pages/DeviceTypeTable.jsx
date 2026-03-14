@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Table,
   Button,
@@ -8,23 +8,28 @@ import {
   Switch,
   Space,
   message,
-  Grid
+  Grid,
+  Select,
+  Popconfirm,
+  Tag
 } from 'antd';
 
 import {
   useGetDeviceTypesQuery,
   useCreateDeviceTypeMutation,
   useUpdateDeviceTypeMutation,
-  useDeleteDeviceTypeMutation
+  useDeleteDeviceTypeMutation,
+  useMergeDeviceTypesMutation
 } from '../store/api/deviceTypeApi';
 
 const { useBreakpoint } = Grid;
 
 export default function DeviceTypeTable() {
-  const { data: deviceTypes, refetch } = useGetDeviceTypesQuery();
+  const { data: deviceTypes = [], refetch, isLoading } = useGetDeviceTypesQuery();
   const [createDeviceType] = useCreateDeviceTypeMutation();
   const [updateDeviceType] = useUpdateDeviceTypeMutation();
   const [deleteDeviceType] = useDeleteDeviceTypeMutation();
+  const [mergeDeviceTypes, { isLoading: isMerging }] = useMergeDeviceTypesMutation();
 
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -33,11 +38,16 @@ export default function DeviceTypeTable() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
 
+  const [isMergeModalVisible, setIsMergeModalVisible] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState(undefined);
+  const [mergeSourceIds, setMergeSourceIds] = useState([]);
+
   const [form] = Form.useForm();
 
   const handleAdd = () => {
     setEditingDevice(null);
     form.resetFields();
+    form.setFieldsValue({ isActive: true });
     setIsModalVisible(true);
   };
 
@@ -76,9 +86,51 @@ export default function DeviceTypeTable() {
     }
   };
 
-  const filteredData = deviceTypes?.filter((dt) =>
-    dt.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleMerge = async () => {
+    if (!mergeTargetId) {
+      message.warning('Выбери основное устройство');
+      return;
+    }
+
+    if (!mergeSourceIds.length) {
+      message.warning('Выбери устройства для объединения');
+      return;
+    }
+
+    if (mergeSourceIds.includes(mergeTargetId)) {
+      message.warning('Основное устройство не должно входить в список объединяемых');
+      return;
+    }
+
+    try {
+      await mergeDeviceTypes({
+        targetId: mergeTargetId,
+        sourceIds: mergeSourceIds,
+      }).unwrap();
+
+      message.success('Устройства успешно объединены');
+      setIsMergeModalVisible(false);
+      setMergeTargetId(undefined);
+      setMergeSourceIds([]);
+      refetch();
+    } catch (e) {
+      message.error('Ошибка объединения');
+    }
+  };
+
+  const filteredData = useMemo(() => {
+    return deviceTypes.filter((dt) => {
+      const text = `${dt.name || ''} ${dt.brand || ''}`.toLowerCase();
+      return text.includes(search.toLowerCase());
+    });
+  }, [deviceTypes, search]);
+
+  const activeOptions = deviceTypes
+    .filter((d) => d.isActive)
+    .map((d) => ({
+      label: `${d.name}${d.brand ? ` (${d.brand})` : ''}`,
+      value: d.id,
+    }));
 
   const columns = [
     {
@@ -86,19 +138,31 @@ export default function DeviceTypeTable() {
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
+      render: (_, record) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{record.name}</div>
+          {isMobile && record.brand ? (
+            <div style={{ color: '#888', fontSize: 12 }}>{record.brand}</div>
+          ) : null}
+        </div>
+      ),
     },
     {
       title: 'Бренд',
       dataIndex: 'brand',
       key: 'brand',
-      responsive: ['md'], // скрывается на мобильных
+      responsive: ['md'],
     },
     {
       title: 'Активно',
       dataIndex: 'isActive',
       key: 'isActive',
       responsive: ['sm'],
-      render: (val) => (val ? 'Да' : 'Нет'),
+      render: (val) => (
+        <Tag color={val ? 'green' : 'red'}>
+          {val ? 'Да' : 'Нет'}
+        </Tag>
+      ),
     },
     {
       title: 'Действия',
@@ -112,14 +176,21 @@ export default function DeviceTypeTable() {
           >
             Редактировать
           </Button>
-          <Button
-            type="link"
-            danger
-            size={isMobile ? 'small' : 'middle'}
-            onClick={() => handleDelete(record.id)}
+
+          <Popconfirm
+            title="Удалить устройство?"
+            okText="Да"
+            cancelText="Нет"
+            onConfirm={() => handleDelete(record.id)}
           >
-            Удалить
-          </Button>
+            <Button
+              type="link"
+              danger
+              size={isMobile ? 'small' : 'middle'}
+            >
+              Удалить
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -136,7 +207,7 @@ export default function DeviceTypeTable() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
-          style={{ width: isMobile ? '100%' : 250 }}
+          style={{ width: isMobile ? '100%' : 280 }}
         />
 
         <Button
@@ -146,18 +217,26 @@ export default function DeviceTypeTable() {
         >
           Добавить устройство
         </Button>
+
+        <Button
+          onClick={() => setIsMergeModalVisible(true)}
+          block={isMobile}
+        >
+          Объединить устройства
+        </Button>
       </Space>
 
       <Table
         columns={columns}
         dataSource={filteredData}
         rowKey="id"
-        scroll={{ x: true }} // горизонтальный скролл
+        loading={isLoading}
+        scroll={{ x: true }}
         pagination={{
           pageSize: 10,
           showSizeChanger: false,
         }}
-        size={'small'}
+        size="small"
       />
 
       <Modal
@@ -189,6 +268,46 @@ export default function DeviceTypeTable() {
             valuePropName="checked"
           >
             <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Объединить устройства"
+        open={isMergeModalVisible}
+        onOk={handleMerge}
+        onCancel={() => {
+          setIsMergeModalVisible(false);
+          setMergeTargetId(undefined);
+          setMergeSourceIds([]);
+        }}
+        okText="Объединить"
+        confirmLoading={isMerging}
+        width={isMobile ? '100%' : 700}
+        style={isMobile ? { top: 0 } : {}}
+      >
+        <Form layout="vertical">
+          <Form.Item label="Основное устройство">
+            <Select
+              showSearch
+              placeholder="Выбери устройство, в которое будет объединение"
+              value={mergeTargetId}
+              onChange={setMergeTargetId}
+              options={activeOptions}
+              optionFilterProp="label"
+            />
+          </Form.Item>
+
+          <Form.Item label="Какие устройства объединить в него">
+            <Select
+              mode="multiple"
+              showSearch
+              placeholder="Выбери дубли"
+              value={mergeSourceIds}
+              onChange={setMergeSourceIds}
+              options={activeOptions.filter((o) => o.value !== mergeTargetId)}
+              optionFilterProp="label"
+            />
           </Form.Item>
         </Form>
       </Modal>

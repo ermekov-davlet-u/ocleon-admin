@@ -12,13 +12,22 @@ const LoginPage = ({ onSuccess }) => {
   const onFinish = async (values) => {
     try {
       const response = await login({
-        username: values.email, // твой backend ожидает username
+        userName: values.email,
         password: values.password,
       }).unwrap();
 
       console.log("Login success:", response);
       message.success("Вы успешно вошли!");
-      onSuccess();
+      const token =
+        response?.token ||
+        response?.accessToken ||
+        response?.access_token;
+
+      if (!token) {
+        console.warn("JWT токен не найден в ответе", response);
+      }
+
+      onSuccess(token);
     } catch (err) {
       console.error("Login error:", err);
       message.error("Неверный логин или пароль");

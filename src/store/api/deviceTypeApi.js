@@ -1,9 +1,9 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { mainURL } from '../../config';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQueryWithReauth } from './baseQuery';
 
 export const deviceTypeApi = createApi({
   reducerPath: 'deviceTypeApi',
-  baseQuery: fetchBaseQuery({ baseUrl: mainURL }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: ['DeviceType'],
   endpoints: (builder) => ({
     getDeviceTypes: builder.query({
@@ -33,6 +33,13 @@ export const deviceTypeApi = createApi({
       }),
       invalidatesTags: ['DeviceType'],
     }),
+    mergeDeviceTypes: builder.mutation({
+      query: (body) => ({
+        url: 'device-types/merge',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -41,4 +48,5 @@ export const {
   useCreateDeviceTypeMutation,
   useUpdateDeviceTypeMutation,
   useDeleteDeviceTypeMutation,
+  useMergeDeviceTypesMutation
 } = deviceTypeApi;

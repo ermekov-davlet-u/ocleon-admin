@@ -1,11 +1,33 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Table, Tag, Spin, Button, Modal, Form, Input,
-  InputNumber, Switch, message, Grid, Upload, Image,
-  Space, Popconfirm, Tooltip,
+  Table,
+  Tag,
+  Spin,
+  Button,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Switch,
+  message,
+  Grid,
+  Upload,
+  Image,
+  Space,
+  Popconfirm,
+  Tooltip,
+  Card,
+  Row,
+  Col,
+  Typography,
+  Divider,
 } from "antd";
 import {
-  UploadOutlined, DeleteOutlined, EyeOutlined, PlusOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  EditOutlined,
+  InboxOutlined,
 } from "@ant-design/icons";
 import {
   useGetMaterialsQuery,
@@ -16,59 +38,119 @@ import {
 import { imageURL } from "../config";
 
 const { useBreakpoint } = Grid;
+const { Text } = Typography;
 
 // ── Хелпер: строим URL для файла ─────────────────────────────────────────────
 const fileUrl = (filePath) => {
   if (!filePath) return "";
-  // убираем leading "./" если есть
   const clean = filePath.replace(/^\.\//, "");
   return `${imageURL}/${clean}`;
 };
 
-// ── Компонент: превью файлов материала ───────────────────────────────────────
-function MaterialFiles({ material, onDeleteFile }) {
+// ── Бейдж активности ─────────────────────────────────────────────────────────
+function ActiveTag({ isActive }) {
+  return (
+    <Tag
+      color={isActive ? "green" : "red"}
+      style={{
+        borderRadius: 999,
+        paddingInline: 10,
+        fontWeight: 600,
+      }}
+    >
+      {isActive ? "Активен" : "Неактивен"}
+    </Tag>
+  );
+}
+
+// ── Превью файлов материала ──────────────────────────────────────────────────
+function MaterialFiles({ material, onDeleteFile, compact = false }) {
   if (!material?.files?.length) {
-    return <span style={{ color: "#bbb", fontSize: 12 }}>Нет файлов</span>;
+    return (
+      <span style={{ color: "#999", fontSize: 12 }}>
+        Нет файлов
+      </span>
+    );
   }
 
   return (
-    <Space wrap size={4}>
+    <Space wrap size={compact ? 6 : 10}>
       {material.files.map((f) => {
-        const url  = fileUrl(f.filePath);
+        const url = fileUrl(f.filePath);
         const isImg = f.mimeType?.startsWith("image/");
 
         return (
-          <div key={f.id} style={{ position: "relative", display: "inline-block" }}>
+          <div
+            key={f.id}
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             {isImg ? (
               <Image
                 src={url}
-                width={48}
-                height={48}
-                style={{ objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }}
+                width={compact ? 56 : 72}
+                height={compact ? 56 : 72}
+                style={{
+                  objectFit: "cover",
+                  borderRadius: 10,
+                  border: "1px solid #f0f0f0",
+                  background: "#fafafa",
+                }}
                 preview={{ mask: <EyeOutlined /> }}
               />
             ) : (
               <Tooltip title={f.originalName}>
-                <a href={url} target="_blank" rel="noreferrer"
-                  style={{ fontSize: 11, color: "#6c5ce7" }}>
-                  📄 {f.originalName?.slice(0, 12)}…
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: compact ? 56 : 72,
+                    height: compact ? 56 : 72,
+                    borderRadius: 10,
+                    border: "1px solid #f0f0f0",
+                    background: "#fafafa",
+                    padding: 6,
+                    fontSize: 11,
+                    textAlign: "center",
+                    color: "#6c5ce7",
+                    textDecoration: "none",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  📄 {f.originalName?.slice(0, compact ? 10 : 14) || "Файл"}
                 </a>
               </Tooltip>
             )}
 
-            {/* Кнопка удаления файла */}
             <Popconfirm
               title="Удалить файл?"
               onConfirm={() => onDeleteFile(material.id, f.id)}
-              okText="Да" cancelText="Нет"
+              okText="Да"
+              cancelText="Нет"
             >
               <Button
-                size="small" danger type="text"
+                size="small"
+                danger
+                type="primary"
                 icon={<DeleteOutlined style={{ fontSize: 10 }} />}
                 style={{
-                  position: "absolute", top: -6, right: -6,
-                  width: 18, height: 18, minWidth: 18, padding: 0,
-                  borderRadius: "50%", background: "#fff", border: "1px solid #ffa39e",
+                  position: "absolute",
+                  top: -8,
+                  right: -8,
+                  width: 20,
+                  height: 20,
+                  minWidth: 20,
+                  padding: 0,
+                  borderRadius: "50%",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
                 }}
               />
             </Popconfirm>
@@ -79,31 +161,139 @@ function MaterialFiles({ material, onDeleteFile }) {
   );
 }
 
-// ── Основной компонент ────────────────────────────────────────────────────────
+// ── Карточка для мобильной версии ────────────────────────────────────────────
+function MaterialMobileCard({ record, onEdit, onDeleteFile }) {
+  return (
+    <Card
+      size="small"
+      style={{
+        borderRadius: 16,
+        boxShadow: "0 6px 18px rgba(0,0,0,0.05)",
+        border: "1px solid #f0f0f0",
+      }}
+      bodyStyle={{ padding: 14 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 10,
+          alignItems: "flex-start",
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: 16,
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+            }}
+          >
+            {record.name || "Без названия"}
+          </div>
+
+          <div style={{ color: "#888", fontSize: 12, marginTop: 4 }}>
+            Штрих-код: {record.barcode || "—"}
+          </div>
+        </div>
+
+        <ActiveTag isActive={record.isActive} />
+      </div>
+
+      <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
+        <Col span={12}>
+          <div
+            style={{
+              background: "#fafafa",
+              borderRadius: 12,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ color: "#888", fontSize: 12 }}>Цена</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {record.price ?? 0} сом
+            </div>
+          </div>
+        </Col>
+
+        <Col span={12}>
+          <div
+            style={{
+              background: "#fafafa",
+              borderRadius: 12,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ color: "#888", fontSize: 12 }}>Толщина</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {record.thickness ?? "—"}
+            </div>
+          </div>
+        </Col>
+      </Row>
+
+      <div style={{ marginBottom: 10 }}>
+        <Text style={{ color: "#888", fontSize: 12 }}>Категория</Text>
+        <div style={{ marginTop: 4 }}>
+          {record.type ? <Tag>{record.type}</Tag> : "—"}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <Text style={{ color: "#888", fontSize: 12 }}>Файлы</Text>
+        <div style={{ marginTop: 8 }}>
+          <MaterialFiles
+            material={record}
+            onDeleteFile={onDeleteFile}
+            compact
+          />
+        </div>
+      </div>
+
+      <Button
+        type="primary"
+        icon={<EditOutlined />}
+        block
+        onClick={() => onEdit(record)}
+        style={{ borderRadius: 10, height: 40 }}
+      >
+        Редактировать
+      </Button>
+    </Card>
+  );
+}
+
+// ── Основной компонент ───────────────────────────────────────────────────────
 export default function Materials() {
   const { data, error, isLoading } = useGetMaterialsQuery();
-  const [createMaterial]     = useCreateMaterialMutation();
-  const [updateMaterial]     = useUpdateMaterialMutation();
+  const [createMaterial] = useCreateMaterialMutation();
+  const [updateMaterial] = useUpdateMaterialMutation();
   const [deleteMaterialFile] = useDeleteMaterialFileMutation();
 
-  const screens  = useBreakpoint();
+  const screens = useBreakpoint();
   const isMobile = !screens.md;
 
-  const [modalVisible,     setModalVisible]     = useState(false);
-  const [editingMaterial,  setEditingMaterial]  = useState(null);
-  const [fileList,         setFileList]         = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState(null);
+  const [fileList, setFileList] = useState([]);
   const [form] = Form.useForm();
 
-  // ── Открыть модалку редактирования ────────────────────────────────────────
+  const materials = useMemo(
+    () => data?.map((item) => ({ ...item, key: item.id })) || [],
+    [data]
+  );
+
   const openEdit = (record) => {
     setEditingMaterial(record);
     form.setFieldsValue({
-      name:      record.name,
-      barcode:   record.barcode,
-      type:      record.type,
-      price:     record.price,
+      name: record.name,
+      barcode: record.barcode,
+      type: record.type,
+      price: record.price,
       thickness: record.thickness,
-      isActive:  record.isActive,
+      isActive: record.isActive,
     });
     setFileList([]);
     setModalVisible(true);
@@ -112,25 +302,33 @@ export default function Materials() {
   const openCreate = () => {
     setEditingMaterial(null);
     form.resetFields();
+    form.setFieldsValue({ isActive: true });
     setFileList([]);
     setModalVisible(true);
   };
 
-  // ── Сохранение (create / update) ──────────────────────────────────────────
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingMaterial(null);
+    setFileList([]);
+    form.resetFields();
+  };
+
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
 
-      // Собираем FormData чтобы передать файлы
       const fd = new FormData();
-      fd.append("name",     values.name ?? "");
-      fd.append("barcode",  values.barcode ?? "");
-      if (values.type)      fd.append("type",      values.type);
-      if (values.price)     fd.append("price",     values.price);
-      if (values.thickness) fd.append("thickness", values.thickness);
-      fd.append("isActive", values.isActive ?? true);
+      fd.append("name", values.name ?? "");
+      fd.append("barcode", values.barcode ?? "");
+      fd.append("type", values.type ?? "");
+      fd.append("price", values.price != null ? String(values.price) : "");
+      fd.append(
+        "thickness",
+        values.thickness != null ? String(values.thickness) : ""
+      );
+      fd.append("isActive", String(values.isActive ?? true));
 
-      // Прикрепляем все выбранные файлы
       fileList.forEach((f) => {
         if (f.originFileObj) {
           fd.append("files", f.originFileObj);
@@ -145,17 +343,13 @@ export default function Materials() {
         message.success("Материал создан");
       }
 
-      setModalVisible(false);
-      setEditingMaterial(null);
-      setFileList([]);
-      form.resetFields();
+      closeModal();
     } catch (err) {
       console.error(err);
       message.error("Ошибка при сохранении");
     }
   };
 
-  // ── Удалить файл материала ─────────────────────────────────────────────────
   const handleDeleteFile = async (materialId, fileId) => {
     try {
       await deleteMaterialFile({ materialId, fileId }).unwrap();
@@ -165,7 +359,6 @@ export default function Materials() {
     }
   };
 
-  // ── Колонки таблицы ────────────────────────────────────────────────────────
   const columns = [
     {
       title: "Штрих-код",
@@ -173,56 +366,67 @@ export default function Materials() {
       key: "barcode",
       ellipsis: true,
       responsive: ["md"],
+      width: 170,
     },
     {
       title: "Название",
       dataIndex: "name",
       key: "name",
       ellipsis: true,
+      render: (value) => <span style={{ fontWeight: 600 }}>{value}</span>,
     },
     {
       title: "Цена",
       dataIndex: "price",
       key: "price",
-      render: (price) => `${price ?? 0} сом`,
+      width: 120,
+      render: (price) => (
+        <span style={{ fontWeight: 600 }}>{price ?? 0} сом</span>
+      ),
     },
     {
       title: "Категория",
       dataIndex: "type",
       key: "type",
       responsive: ["sm"],
-      render: (type) => type ? <Tag>{type}</Tag> : "—",
+      width: 140,
+      render: (type) => (type ? <Tag>{type}</Tag> : "—"),
     },
     {
-      title: "Активен",
+      title: "Толщина",
+      dataIndex: "thickness",
+      key: "thickness",
+      responsive: ["lg"],
+      width: 120,
+      render: (value) => value ?? "—",
+    },
+    {
+      title: "Активность",
       dataIndex: "isActive",
       key: "isActive",
       responsive: ["lg"],
-      render: (isActive) => (
-        <Tag color={isActive ? "green" : "red"}>
-          {isActive ? "Да" : "Нет"}
-        </Tag>
-      ),
+      width: 130,
+      render: (isActive) => <ActiveTag isActive={isActive} />,
     },
     {
-      // ✅ Превью файлов прямо в таблице
       title: "Файлы",
       key: "files",
       render: (_, record) => (
-        <MaterialFiles
-          material={record}
-          onDeleteFile={handleDeleteFile}
-        />
+        <MaterialFiles material={record} onDeleteFile={handleDeleteFile} />
       ),
     },
     {
       title: "Действия",
       key: "actions",
+      width: 150,
       render: (_, record) => (
         <Button
-          type="link"
-          size={isMobile ? "small" : "middle"}
+          type="primary"
+          ghost
+          icon={<EditOutlined />}
+          size="middle"
           onClick={() => openEdit(record)}
+          style={{ borderRadius: 10 }}
         >
           Редактировать
         </Button>
@@ -230,85 +434,196 @@ export default function Materials() {
     },
   ];
 
-  if (isLoading) return <Spin style={{ margin: 50 }} />;
-  if (error)     return <div>Ошибка загрузки данных</div>;
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: 260,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card style={{ borderRadius: 16 }}>
+        <div style={{ color: "#ff4d4f" }}>Ошибка загрузки данных</div>
+      </Card>
+    );
+  }
 
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Button
-        type="primary"
-        block={isMobile}
-        style={{ marginBottom: 16 }}
-        onClick={openCreate}
+      <Card
+        style={{
+          borderRadius: 20,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
+          border: "1px solid #f0f0f0",
+        }}
+        bodyStyle={{ padding: isMobile ? 14 : 20 }}
       >
-        Создать материал
-      </Button>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "stretch" : "center",
+            flexDirection: isMobile ? "column" : "row",
+            gap: 12,
+            marginBottom: 18,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800 }}>
+              Материалы
+            </div>
+            <div style={{ color: "#888", marginTop: 4, fontSize: 13 }}>
+              Управление материалами и файлами
+            </div>
+          </div>
 
-      <Table
-        dataSource={data?.map((item) => ({ ...item, key: item.id }))}
-        columns={columns}
-        bordered
-        scroll={{ x: true }}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-      />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            block={isMobile}
+            size={isMobile ? "middle" : "large"}
+            onClick={openCreate}
+            style={{
+              borderRadius: 12,
+              height: isMobile ? 42 : 44,
+              fontWeight: 600,
+            }}
+          >
+            Создать материал
+          </Button>
+        </div>
 
-      {/* ── Модалка создания / редактирования ─────────────────────────────── */}
+        {isMobile ? (
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            {materials.length ? (
+              materials.map((item) => (
+                <MaterialMobileCard
+                  key={item.id}
+                  record={item}
+                  onEdit={openEdit}
+                  onDeleteFile={handleDeleteFile}
+                />
+              ))
+            ) : (
+              <Card
+                style={{
+                  borderRadius: 16,
+                  textAlign: "center",
+                  color: "#999",
+                }}
+              >
+                Нет материалов
+              </Card>
+            )}
+          </Space>
+        ) : (
+          <Table
+            dataSource={materials}
+            columns={columns}
+            bordered
+            scroll={{ x: 1100 }}
+            size="middle"
+            pagination={{ pageSize: 10, showSizeChanger: false }}
+            style={{
+              borderRadius: 14,
+              overflow: "hidden",
+            }}
+          />
+        )}
+      </Card>
+
       <Modal
         title={editingMaterial ? "Редактировать материал" : "Создать материал"}
         open={modalVisible}
         onOk={handleOk}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditingMaterial(null);
-          setFileList([]);
-          form.resetFields();
-        }}
+        onCancel={closeModal}
         okText="Сохранить"
-        width={isMobile ? "100%" : 620}
-        style={isMobile ? { top: 0 } : {}}
+        cancelText="Отмена"
+        width={isMobile ? "100%" : 720}
+        style={isMobile ? { top: 0, paddingBottom: 0 } : {}}
+        bodyStyle={{
+          maxHeight: isMobile ? "calc(100vh - 140px)" : "70vh",
+          overflowY: "auto",
+          padding: isMobile ? 14 : 20,
+        }}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="barcode"
-            label="Штрих-код"
-          >
-            <Input />
-          </Form.Item>
+          <Row gutter={12}>
+            <Col xs={24} md={12}>
+              <Form.Item name="barcode" label="Штрих-код">
+                <Input placeholder="Введите штрих-код" />
+              </Form.Item>
+            </Col>
 
-          <Form.Item
-            name="name"
-            label="Название"
-            rules={[{ required: true, message: "Введите название" }]}
-          >
-            <Input />
-          </Form.Item>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="name"
+                label="Название"
+                rules={[{ required: true, message: "Введите название" }]}
+              >
+                <Input placeholder="Введите название материала" />
+              </Form.Item>
+            </Col>
 
-          <Form.Item name="type" label="Категория">
-            <Input />
-          </Form.Item>
+            <Col xs={24} md={12}>
+              <Form.Item name="type" label="Категория">
+                <Input placeholder="Например: гидрогель" />
+              </Form.Item>
+            </Col>
 
-          <Form.Item
-            name="price"
-            label="Цена"
-            rules={[{ required: true, message: "Введите цену" }]}
-          >
-            <InputNumber min={0} style={{ width: "100%" }} addonAfter="сом" />
-          </Form.Item>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="price"
+                label="Цена"
+                rules={[{ required: true, message: "Введите цену" }]}
+              >
+                <InputNumber
+                  min={0}
+                  style={{ width: "100%" }}
+                  addonAfter="сом"
+                  placeholder="0"
+                />
+              </Form.Item>
+            </Col>
 
-          <Form.Item name="thickness" label="Толщина">
-            <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
-          </Form.Item>
+            <Col xs={24} md={12}>
+              <Form.Item name="thickness" label="Толщина">
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  style={{ width: "100%" }}
+                  placeholder="0.00"
+                />
+              </Form.Item>
+            </Col>
 
-          <Form.Item name="isActive" label="Активен" valuePropName="checked" initialValue={true}>
-            <Switch />
-          </Form.Item>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="isActive"
+                label="Активен"
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
 
-          {/* ── Загрузка файлов ────────────────────────────────────────── */}
-          <Form.Item label="Файлы / Изображения">
+          <Divider style={{ margin: "8px 0 16px" }} />
+
+          <Form.Item label="Файлы / изображения">
             <Upload
               multiple
-              beforeUpload={() => false}    // не отправлять сразу
+              beforeUpload={() => false}
               fileList={fileList}
               onChange={({ fileList: fl }) => setFileList(fl)}
               listType="picture-card"
@@ -316,14 +631,15 @@ export default function Materials() {
             >
               {fileList.length < 10 && (
                 <div>
-                  <PlusOutlined />
-                  <div style={{ marginTop: 8 }}>Добавить</div>
+                  <InboxOutlined style={{ fontSize: 18 }} />
+                  <div style={{ marginTop: 8 }}>
+                    {isMobile ? "Добавить" : "Загрузить"}
+                  </div>
                 </div>
               )}
             </Upload>
           </Form.Item>
 
-          {/* ── Существующие файлы при редактировании ─────────────────── */}
           {editingMaterial?.files?.length > 0 && (
             <Form.Item label="Текущие файлы">
               <MaterialFiles

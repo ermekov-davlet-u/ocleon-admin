@@ -1,5 +1,13 @@
-import { Table, Button, Tag, Space, message, Modal } from 'antd';
-import { useGetOrdersQuery, useDeleteOrderMutation, useChangeOrderStatusMutation, useCreateOrderMutation } from '../store/api/orderApi';
+import React from 'react';
+import { Table, Button, Tag, Space, message, Modal, Grid, Card } from 'antd';
+import {
+  useGetOrdersQuery,
+  useDeleteOrderMutation,
+  useChangeOrderStatusMutation,
+  useCreateOrderMutation,
+} from '../store/api/orderApi';
+
+const { useBreakpoint } = Grid;
 
 export const CuttingOrderStatus = {
   NEW: 'NEW',
@@ -17,7 +25,18 @@ const statusColors = {
   DEFECT: 'volcano',
 };
 
+const statusLabels = {
+  NEW: 'Новый',
+  IN_PROGRESS: 'В работе',
+  DONE: 'Готово',
+  REWORK: 'Переклейка',
+  DEFECT: 'Брак',
+};
+
 const CuttingOrdersTable = () => {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const { data: orders, isLoading, refetch } = useGetOrdersQuery();
   const [deleteOrder] = useDeleteOrderMutation();
   const [changeStatus] = useChangeOrderStatusMutation();
@@ -55,7 +74,7 @@ const CuttingOrdersTable = () => {
   const handleRecreateOrder = async (record) => {
     try {
       await createOrder({
-        cuttingJobId: record.cuttingJob.id,
+        cuttingJobId: record.cuttingJob?.id,
         quantity: record.quantity,
         notes: record.notes,
         clientName: record.client?.name,
@@ -64,6 +83,7 @@ const CuttingOrdersTable = () => {
         discountId: record.discount?.id,
         summa: record.finalAmount,
       }).unwrap();
+
       message.success('Заказ повторно создан!');
       refetch();
     } catch (err) {
@@ -75,7 +95,7 @@ const CuttingOrdersTable = () => {
   const formatDate = (date) => {
     if (!date) return '-';
     const d = new Date(date);
-    return d.toLocaleDateString('ru-RU', {
+    return d.toLocaleString('ru-RU', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -84,21 +104,124 @@ const CuttingOrdersTable = () => {
     });
   };
 
-  const columns = [
+  const renderActions = (record) => {
+    const isDone = record.status === CuttingOrderStatus.DONE;
+    const isDefect = record.status === CuttingOrderStatus.DEFECT;
+
+    if (isMobile) {
+      return (
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {!isDone && !isDefect && (
+            <>
+              <Button
+                block
+                size="small"
+                type="primary"
+                onClick={() =>
+                  handleStatusChange(record.id, CuttingOrderStatus.DONE)
+                }
+              >
+                Готово
+              </Button>
+            </>
+          )}
+
+          <Button
+            block
+            size="small"
+            danger
+            onClick={() => handleDelete(record.id)}
+          >
+            Удалить
+          </Button>
+        </Space>
+      );
+    }
+
+    return (
+      <Space wrap>
+        {!isDone && !isDefect && (
+          <>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() =>
+                handleStatusChange(record.id, CuttingOrderStatus.DONE)
+              }
+            >
+              Готово
+            </Button>
+          </>
+        )}
+
+        <Button size="small" danger onClick={() => handleDelete(record.id)}>
+          Удалить
+        </Button>
+      </Space>
+    );
+  };
+
+  const mobileColumns = [
+    {
+      title: 'Заказ',
+      key: 'mobileOrder',
+      render: (_, record) => (
+        <Card
+          size="small"
+          bodyStyle={{ padding: 12 }}
+          style={{
+            borderRadius: 12,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <b>Заказ #{record.id}</b>
+            <Tag color={statusColors[record.status]}>
+              {statusLabels[record.status] || record.status}
+            </Tag>
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+            <div>
+              <b>Телефон:</b> {record.client?.phone || '-'}
+            </div>
+            <div>
+              <b>Материал:</b> {record.cuttingJob?.material?.name || '-'}
+            </div>
+            <div>
+              <b>Тип брони:</b> {record.cuttingJob?.armorType?.name || '-'}
+            </div>
+            <div>
+              <b>Устройство:</b> {record.cuttingJob?.deviceType?.name || '-'}
+            </div>
+            <div>
+              <b>Кол-во:</b> {record.quantity ?? '-'}
+            </div>
+            <div>
+              <b>Сумма:</b> {record.totalAmount ?? '-'}
+            </div>
+            <div>
+              <b>Итог:</b> {record.finalAmount ?? '-'}
+            </div>
+            <div>
+              <b>Дата:</b> {formatDate(record.createdAt)}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>{renderActions(record)}</div>
+        </Card>
+      ),
+    },
+  ];
+
+  const desktopColumns = [
     {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
       sorter: (a, b) => a.id - b.id,
       responsive: ['md'],
+      width: 80,
     },
-    // {
-    //   title: 'Клиент',
-    //   dataIndex: ['client', 'name'],
-    //   key: 'client',
-    //   filters: Array.from(new Set(orders?.map(o => o.client?.name || '-'))).map(n => ({ text: n, value: n })),
-    //   onFilter: (value, record) => (record.client?.name || '-') === value,
-    // },
     {
       title: 'Клиент',
       dataIndex: ['client', 'phone'],
@@ -108,49 +231,69 @@ const CuttingOrdersTable = () => {
     {
       title: 'Материал',
       key: 'material',
-      render: (_, record) => record.material?.name || '-',
-      filters: Array.from(new Set(orders?.map(o => o.cuttingJob?.material?.name || '-'))).map(n => ({ text: n, value: n })),
-      onFilter: (value, record) => (record.cuttingJob?.material?.name || '-') === value,
+      render: (_, record) => record.cuttingJob?.material?.name || '-',
+      filters: Array.from(
+        new Set(orders?.map((o) => o.cuttingJob?.material?.name || '-') || [])
+      ).map((n) => ({ text: n, value: n })),
+      onFilter: (value, record) =>
+        (record.cuttingJob?.material?.name || '-') === value,
     },
     {
       title: 'Тип брони',
       key: 'armorType',
       render: (_, record) => record.cuttingJob?.armorType?.name || '-',
-      filters: Array.from(new Set(orders?.map(o => o.cuttingJob?.armorType?.name || '-'))).map(n => ({ text: n, value: n })),
-      onFilter: (value, record) => (record.cuttingJob?.armorType?.name || '-') === value,
+      filters: Array.from(
+        new Set(orders?.map((o) => o.cuttingJob?.armorType?.name || '-') || [])
+      ).map((n) => ({ text: n, value: n })),
+      onFilter: (value, record) =>
+        (record.cuttingJob?.armorType?.name || '-') === value,
     },
     {
       title: 'Устройство',
       key: 'deviceType',
       render: (_, record) => record.cuttingJob?.deviceType?.name || '-',
-      filters: Array.from(new Set(orders?.map(o => o.cuttingJob?.deviceType?.name || '-'))).map(n => ({ text: n, value: n })),
-      onFilter: (value, record) => (record.cuttingJob?.deviceType?.name || '-') === value,
+      filters: Array.from(
+        new Set(orders?.map((o) => o.cuttingJob?.deviceType?.name || '-') || [])
+      ).map((n) => ({ text: n, value: n })),
+      onFilter: (value, record) =>
+        (record.cuttingJob?.deviceType?.name || '-') === value,
     },
     {
       title: 'Кол-во',
       dataIndex: 'quantity',
       key: 'quantity',
       sorter: (a, b) => a.quantity - b.quantity,
+      width: 90,
     },
     {
       title: 'Статус',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <Tag color={statusColors[status]}>{status}</Tag>,
-      filters: Object.values(CuttingOrderStatus).map(s => ({ text: s, value: s })),
+      render: (status) => (
+        <Tag color={statusColors[status]}>
+          {statusLabels[status] || status}
+        </Tag>
+      ),
+      filters: Object.values(CuttingOrderStatus).map((s) => ({
+        text: statusLabels[s] || s,
+        value: s,
+      })),
       onFilter: (value, record) => record.status === value,
+      width: 130,
     },
     {
       title: 'Сумма',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
-      sorter: (a, b) => a.totalAmount - b.totalAmount,
+      sorter: (a, b) => (a.totalAmount || 0) - (b.totalAmount || 0),
+      width: 100,
     },
     {
       title: 'Итоговая сумма',
       dataIndex: 'finalAmount',
       key: 'finalAmount',
-      sorter: (a, b) => a.finalAmount - b.finalAmount,
+      sorter: (a, b) => (a.finalAmount || 0) - (b.finalAmount || 0),
+      width: 130,
     },
     {
       title: 'Дата создания',
@@ -159,39 +302,14 @@ const CuttingOrdersTable = () => {
       responsive: ['md'],
       render: formatDate,
       sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      width: 160,
     },
     {
       title: 'Действия',
       key: 'actions',
-      render: (_, record) => {
-        const isDone = record.status === CuttingOrderStatus.DONE;
-        const isDefect = record.status === CuttingOrderStatus.DEFECT;
-
-        return (
-          <Space>
-            {!isDone && !isDefect && (
-              <>
-                <Button size="small" onClick={() => handleStatusChange(record.id, CuttingOrderStatus.IN_PROGRESS)}>
-                  В работе
-                </Button>
-                <Button size="small" onClick={() => handleStatusChange(record.id, CuttingOrderStatus.DONE)}>
-                  Готово
-                </Button>
-              </>
-            )}
-
-            {isDefect && (
-              <Button size="small" type="dashed" onClick={() => handleRecreateOrder(record)}>
-                Повторить
-              </Button>
-            )}
-
-            <Button size="small" danger onClick={() => handleDelete(record.id)}>
-              Удалить
-            </Button>
-          </Space>
-        );
-      },
+      render: (_, record) => renderActions(record),
+      width: 220,
+      fixed: 'right',
     },
   ];
 
@@ -199,11 +317,14 @@ const CuttingOrdersTable = () => {
     <Table
       rowKey="id"
       loading={isLoading}
-      dataSource={orders}
-      columns={columns}
-      scroll={{ x: true }}
-      size="small"
-      responsive
+      dataSource={orders || []}
+      columns={isMobile ? mobileColumns : desktopColumns}
+      scroll={isMobile ? undefined : { x: 1200 }}
+      size={isMobile ? 'middle' : 'small'}
+      pagination={{
+        pageSize: isMobile ? 5 : 10,
+        showSizeChanger: !isMobile,
+      }}
     />
   );
 };

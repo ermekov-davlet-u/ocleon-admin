@@ -15,6 +15,7 @@ import {
     Row,
     Col,
     Statistic,
+    Grid,
 } from "antd";
 import dayjs from "dayjs";
 import {
@@ -25,6 +26,7 @@ import {
 
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
+const { useBreakpoint } = Grid;
 
 const statusOptions = [
     { label: "Ожидает", value: "pending" },
@@ -48,6 +50,9 @@ const statusLabelMap = {
 };
 
 const BookingsTable = () => {
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
+
     const [statusFilter, setStatusFilter] = useState(undefined);
     const [dateRange, setDateRange] = useState(null);
 
@@ -145,7 +150,100 @@ const BookingsTable = () => {
         };
     }, [bookings]);
 
-    const columns = [
+    const renderActions = (record) => {
+        if (isMobile) {
+            return (
+                <Space direction="vertical" style={{ width: "100%" }} size={8}>
+                    <Button type="primary" block onClick={() => handleEdit(record)}>
+                        Редактировать
+                    </Button>
+
+                    <Popconfirm
+                        title="Удалить бронирование?"
+                        description={`Запись #${record.id} будет удалена`}
+                        onConfirm={() => handleDelete(record.id)}
+                        okText="Да"
+                        cancelText="Нет"
+                    >
+                        <Button danger block loading={isDeleting}>
+                            Удалить
+                        </Button>
+                    </Popconfirm>
+                </Space>
+            );
+        }
+
+        return (
+            <Space>
+                <Button type="primary" onClick={() => handleEdit(record)}>
+                    Редактировать
+                </Button>
+
+                <Popconfirm
+                    title="Удалить бронирование?"
+                    description={`Запись #${record.id} будет удалена`}
+                    onConfirm={() => handleDelete(record.id)}
+                    okText="Да"
+                    cancelText="Нет"
+                >
+                    <Button danger loading={isDeleting}>
+                        Удалить
+                    </Button>
+                </Popconfirm>
+            </Space>
+        );
+    };
+
+    const mobileColumns = [
+        {
+            title: "Бронирование",
+            key: "booking",
+            render: (_, record) => (
+                <Card
+                    size="small"
+                    bodyStyle={{ padding: 12 }}
+                    style={{ borderRadius: 12 }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: 8,
+                            marginBottom: 10,
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontWeight: 700 }}>Запись #{record.id}</div>
+                            <div style={{ color: "#666", fontSize: 13 }}>
+                                {dayjs(record.scheduledAt).format("DD.MM.YYYY HH:mm")}
+                            </div>
+                        </div>
+
+                        <Tag color={statusColorMap[record.status]}>
+                            {statusLabelMap[record.status]}
+                        </Tag>
+                    </div>
+
+                    <div style={{ fontSize: 14, lineHeight: 1.7 }}>
+                        <div>
+                            <strong>Клиент:</strong> {record.clientName || "-"}
+                        </div>
+                        <div>
+                            <strong>Телефон:</strong> {record.clientPhone || "-"}
+                        </div>
+                        <div>
+                            <strong>Комментарий:</strong> {record.notes || "-"}
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>{renderActions(record)}</div>
+                </Card>
+            ),
+        },
+    ];
+
+    const desktopColumns = [
         {
             title: "ID",
             dataIndex: "id",
@@ -155,6 +253,7 @@ const BookingsTable = () => {
         {
             title: "Клиент",
             dataIndex: "clientName",
+            width: 200,
             key: "clientName",
             render: (_, record) => (
                 <div>
@@ -164,24 +263,8 @@ const BookingsTable = () => {
             ),
         },
         {
-            title: "Устройство",
-            key: "deviceType",
-            render: (_, record) => record.deviceType?.name || "-",
-        },
-        {
-            title: "Услуга",
-            key: "cuttingJob",
-            render: (_, record) => (
-                <div>
-                    <div>{record.cuttingJob?.name || "-"}</div>
-                    <div style={{ color: "#888", fontSize: 12 }}>
-                        {record.cuttingJob?.armorType?.name || ""}
-                    </div>
-                </div>
-            ),
-        },
-        {
             title: "Дата и время",
+            width: 200,
             dataIndex: "scheduledAt",
             key: "scheduledAt",
             render: (value) => dayjs(value).format("DD.MM.YYYY HH:mm"),
@@ -190,6 +273,7 @@ const BookingsTable = () => {
         },
         {
             title: "Статус",
+            width: 120,
             dataIndex: "status",
             key: "status",
             render: (status) => (
@@ -209,45 +293,45 @@ const BookingsTable = () => {
             title: "Действия",
             key: "actions",
             width: 190,
-            render: (_, record) => (
-                <Space>
-                    <Button type="primary" onClick={() => handleEdit(record)}>
-                        Редактировать
-                    </Button>
-
-                    <Popconfirm
-                        title="Удалить бронирование?"
-                        description={`Запись #${record.id} будет удалена`}
-                        onConfirm={() => handleDelete(record.id)}
-                        okText="Да"
-                        cancelText="Нет"
-                    >
-                        <Button danger loading={isDeleting}>
-                            Удалить
-                        </Button>
-                    </Popconfirm>
-                </Space>
-            ),
+            render: (_, record) => renderActions(record),
         },
     ];
 
     return (
-        <Card title="Бронирования" style={{ borderRadius: 16 }}>
+        <Card
+            title="Бронирования"
+            style={{ borderRadius: 16 }}
+            bodyStyle={{ padding: isMobile ? 12 : 24 }}
+        >
             <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-                <Col xs={24} sm={12} md={6}>
-                    <Statistic title="Всего" value={stats.total} />
+                <Col xs={12} sm={12} md={6}>
+                    <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+                        <Statistic title="Всего" value={stats.total} />
+                    </Card>
                 </Col>
-                <Col xs={12} sm={6} md={4}>
-                    <Statistic title="Ожидает" value={stats.pending} />
+
+                <Col xs={12} sm={12} md={4}>
+                    <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+                        <Statistic title="Ожидает" value={stats.pending} />
+                    </Card>
                 </Col>
-                <Col xs={12} sm={6} md={4}>
-                    <Statistic title="Подтв." value={stats.confirmed} />
+
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+                        <Statistic title="Подтв." value={stats.confirmed} />
+                    </Card>
                 </Col>
-                <Col xs={12} sm={6} md={4}>
-                    <Statistic title="Завершено" value={stats.completed} />
+
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+                        <Statistic title="Завершено" value={stats.completed} />
+                    </Card>
                 </Col>
-                <Col xs={12} sm={6} md={4}>
-                    <Statistic title="Отменено" value={stats.cancelled} />
+
+                <Col xs={12} sm={8} md={4}>
+                    <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+                        <Statistic title="Отменено" value={stats.cancelled} />
+                    </Card>
                 </Col>
             </Row>
 
@@ -273,8 +357,15 @@ const BookingsTable = () => {
                 </Col>
 
                 <Col xs={24} md={6}>
-                    <Space style={{ width: "100%", justifyContent: "flex-end" }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        style={{
+                            width: "100%",
+                            justifyContent: isMobile ? "stretch" : "flex-end",
+                        }}
+                    >
                         <Button
+                            block={isMobile}
                             onClick={() => {
                                 setStatusFilter(undefined);
                                 setDateRange(null);
@@ -282,7 +373,13 @@ const BookingsTable = () => {
                         >
                             Сбросить
                         </Button>
-                        <Button type="primary" onClick={() => refetch()} loading={isFetching}>
+
+                        <Button
+                            type="primary"
+                            block={isMobile}
+                            onClick={() => refetch()}
+                            loading={isFetching}
+                        >
                             Обновить
                         </Button>
                     </Space>
@@ -291,15 +388,15 @@ const BookingsTable = () => {
 
             <Table
                 rowKey="id"
-                columns={columns}
+                columns={isMobile ? mobileColumns : desktopColumns}
                 dataSource={bookings}
                 loading={isLoading || isFetching}
-                bordered
-                size="middle"
-                scroll={{ x: 1200 }}
+                bordered={!isMobile}
+                size={isMobile ? "small" : "middle"}
+                scroll={isMobile ? undefined : { x: 1200 }}
                 pagination={{
-                    pageSize: 10,
-                    showSizeChanger: true,
+                    pageSize: isMobile ? 6 : 10,
+                    showSizeChanger: !isMobile,
                     pageSizeOptions: ["10", "20", "50"],
                 }}
             />
@@ -312,7 +409,7 @@ const BookingsTable = () => {
                 }
                 open={drawerOpen}
                 onClose={handleCloseDrawer}
-                width={480}
+                width={isMobile ? "100%" : 480}
                 destroyOnClose
             >
                 <Form form={form} layout="vertical">
@@ -348,9 +445,23 @@ const BookingsTable = () => {
                         <TextArea rows={4} placeholder="Введите комментарий" />
                     </Form.Item>
 
-                    <Space style={{ display: "flex", justifyContent: "flex-end" }}>
-                        <Button onClick={handleCloseDrawer}>Отмена</Button>
-                        <Button type="primary" loading={isUpdating} onClick={handleUpdate}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            width: "100%",
+                        }}
+                    >
+                        <Button block={isMobile} onClick={handleCloseDrawer}>
+                            Отмена
+                        </Button>
+                        <Button
+                            block={isMobile}
+                            type="primary"
+                            loading={isUpdating}
+                            onClick={handleUpdate}
+                        >
                             Сохранить
                         </Button>
                     </Space>
