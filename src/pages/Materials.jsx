@@ -458,15 +458,15 @@ export default function Materials() {
   }
 
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Card
+    <div>
+      {/* <Card
         style={{
           borderRadius: 20,
           boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
           border: "1px solid #f0f0f0",
         }}
-        bodyStyle={{ padding: isMobile ? 14 : 20 }}
-      >
+        bodyStyle={{ padding: isMobile ? 8 : 20 }}
+      > */}
         <div
           style={{
             display: "flex",
@@ -539,7 +539,7 @@ export default function Materials() {
             }}
           />
         )}
-      </Card>
+      {/* </Card> */}
 
       <Modal
         title={editingMaterial ? "Редактировать материал" : "Создать материал"}

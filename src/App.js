@@ -346,7 +346,7 @@ function App() {
 
         {/* ─── CONTENT ─────────────────────────────────── */}
         <Content style={{
-          margin: 20,
+          margin: 12,
           minHeight: "calc(100vh - 64px - 56px)",
           overflow: "auto",
         }}>

@@ -123,21 +123,21 @@ export default function Types() {
             onClick={() => openModal(record)}
             type="text"
           />
-          <Popconfirm
+          {/* <Popconfirm
             title="Удалить этот вид?"
             onConfirm={() => handleDelete(record.id)}
             okText="Да"
             cancelText="Нет"
           >
             <Button danger icon={<DeleteOutlined />} type="text" />
-          </Popconfirm>
+          </Popconfirm> */}
         </Space>
       ),
     },
   ];
 
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
+    <div style={{ padding: isMobile ? 0 : 12 }}>
       {/* Header */}
       <div
         style={{

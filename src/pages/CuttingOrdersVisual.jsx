@@ -656,11 +656,7 @@ export default function CuttingOrdersPage() {
 		clientPhone,
 		clientEmail: clientEmail || undefined,
 		materialId: selectedMaterial?.id,
-		...(selectedDiscount?.rule && selectedDiscount.rule !== "MANUAL"
-			? { discountRule: selectedDiscount.rule }
-			: selectedDiscount?.id
-				? { discountId: selectedDiscount.id }
-				: {}),
+		discountId: selectedDiscount.id, 
 		...(manualSumma || selectedDiscount?.type === "PRICE_OVERRIDE" ? { summa } : {}),
 	});
 
@@ -887,7 +883,7 @@ export default function CuttingOrdersPage() {
 	];
 
 	return (
-		<div style={{ padding: isMobile ? "12px 12px 24px" : "16px 20px" }}>
+		<div style={{ padding: isMobile ? "0px" : "0px" }}>
 			<div
 				style={{
 					display: "flex",

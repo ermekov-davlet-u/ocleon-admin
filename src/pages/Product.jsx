@@ -128,7 +128,7 @@ export default function CuttingJobPage() {
   ];
 
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
+    <div style={{ padding: 0 }}>
       <Button
         type="primary"
         onClick={() => openModal(null)}
