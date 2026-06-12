@@ -12,6 +12,8 @@ import { usersApi } from './api/userApi';
 import { authApi } from './api/authApi';
 import { discountApi } from './api/discountApi';
 import { bookingsApi } from './api/bookingsApi';
+import { folderApi } from './api/folderApi';
+import { fileApi } from './api/fileApi';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +30,8 @@ export const store = configureStore({
     [usersApi.reducerPath]: usersApi.reducer,
     [authApi.reducerPath]: authApi.reducer,
     [bookingsApi.reducerPath]: bookingsApi.reducer,
+    [folderApi.reducerPath]: folderApi.reducer,
+    [fileApi.reducerPath]: fileApi.reducer
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
@@ -43,7 +47,9 @@ export const store = configureStore({
       invoiceApi.middleware,
       usersApi.middleware,
       bookingsApi.middleware,
-      discountApi.middleware
+      discountApi.middleware,
+      folderApi.middleware,
+      fileApi.middleware
     ),
 });
 

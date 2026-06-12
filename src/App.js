@@ -35,6 +35,7 @@ import PhoneCasePreview from "./pages/PreviewPage";
 import DiscountsPage from "./pages/DiscountsPage";
 import CuttingOrdersVisual from "./pages/CuttingOrdersVisual";
 import BookingsTable from "./pages/BookingsTable";
+import FolderManager from "./pages/FolderManager";
 
 const { Header, Content, Footer, Sider } = Layout;
 const { Text } = Typography;
@@ -196,6 +197,7 @@ function App() {
             { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
             { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
             { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
+            { key: "/folders", icon: <SkinOutlined />, label: "Папки" },
           ]}
         />
       </Sider>
@@ -367,6 +369,7 @@ function App() {
             <Route path="/invoiceForm" element={<IncomingInvoiceForm />} />
             <Route path="/preview" element={<PhoneCasePreview />} />
             <Route path="/booking" element={<BookingsTable />} />
+            <Route path="/folders" element={<FolderManager />} />
           </Routes>
         </Content>
 
