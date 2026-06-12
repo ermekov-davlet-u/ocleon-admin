@@ -40,6 +40,21 @@ export const deviceTypeApi = createApi({
         body,
       }),
     }),
+    uploadDeviceTypeImage: builder.mutation({
+      query: ({ id, file }) => ({
+        url: `device-types/${id}/image`,
+        method: 'POST',
+        body: file,
+      }),
+      invalidatesTags: ['DeviceType'],
+    }),
+    removeDeviceTypeImage: builder.mutation({
+      query: (id) => ({
+        url: `device-types/${id}/image`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['DeviceType'],
+    }),
   }),
 });
 
@@ -48,5 +63,7 @@ export const {
   useCreateDeviceTypeMutation,
   useUpdateDeviceTypeMutation,
   useDeleteDeviceTypeMutation,
-  useMergeDeviceTypesMutation
+  useMergeDeviceTypesMutation,
+  useUploadDeviceTypeImageMutation,
+  useRemoveDeviceTypeImageMutation
 } = deviceTypeApi;

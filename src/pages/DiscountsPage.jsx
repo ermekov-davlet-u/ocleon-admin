@@ -264,7 +264,7 @@ export default function DiscountsPage() {
   const inactiveCount = discounts.length - activeCount;
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       {/* Заголовок */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>

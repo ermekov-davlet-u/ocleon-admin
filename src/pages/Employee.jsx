@@ -69,16 +69,16 @@ export default function Employees() {
           <Button type="link" onClick={() => handleOpenModal(record)}>
             Редактировать
           </Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>
+          {/* <Button type="link" danger onClick={() => handleDelete(record.id)}>
             Удалить
-          </Button>
+          </Button> */}
         </>
       ),
     },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Button type="primary" style={{ marginBottom: 16 }} onClick={() => handleOpenModal()}>
         Добавить пользователя
       </Button>

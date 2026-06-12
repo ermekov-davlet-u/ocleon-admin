@@ -158,7 +158,7 @@ const BookingsTable = () => {
                         Редактировать
                     </Button>
 
-                    <Popconfirm
+                    {/* <Popconfirm
                         title="Удалить бронирование?"
                         description={`Запись #${record.id} будет удалена`}
                         onConfirm={() => handleDelete(record.id)}
@@ -168,7 +168,7 @@ const BookingsTable = () => {
                         <Button danger block loading={isDeleting}>
                             Удалить
                         </Button>
-                    </Popconfirm>
+                    </Popconfirm> */}
                 </Space>
             );
         }

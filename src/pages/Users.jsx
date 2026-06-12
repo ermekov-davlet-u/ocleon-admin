@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Table,
   Button,
@@ -9,7 +9,18 @@ import {
   Space,
   message,
   Grid,
+  Tag,
+  Popconfirm,
+  Card,
 } from 'antd';
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  UserOutlined,
+  PhoneOutlined,
+  MailOutlined,
+} from '@ant-design/icons';
 import {
   useGetClientsQuery,
   useCreateClientMutation,
@@ -20,7 +31,7 @@ import {
 const { useBreakpoint } = Grid;
 
 export default function Clients() {
-  const { data: clients, refetch } = useGetClientsQuery();
+  const { data: clients = [], refetch, isLoading } = useGetClientsQuery();
   const [createClient] = useCreateClientMutation();
   const [updateClient] = useUpdateClientMutation();
   const [deleteClient] = useDeleteClientMutation();
@@ -36,6 +47,7 @@ export default function Clients() {
   const handleAdd = () => {
     setEditingClient(null);
     form.resetFields();
+    form.setFieldsValue({ isActive: true });
     setIsModalVisible(true);
   };
 
@@ -74,115 +86,195 @@ export default function Clients() {
     }
   };
 
-  const filteredData = clients?.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  );
+  const filteredData = useMemo(() => {
+    return clients.filter((c) => {
+      const name = c.name?.toLowerCase() || '';
+      const phone = c.phone || '';
+      const email = c.email?.toLowerCase() || '';
+      const value = search.toLowerCase();
+
+      return (
+        name.includes(value) ||
+        phone.includes(search) ||
+        email.includes(value)
+      );
+    });
+  }, [clients, search]);
+
+  const formatDate = (date) => {
+    if (!date) return '-';
+    const d = new Date(date);
+    return d.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   const columns = [
     {
-      title: 'Имя',
+      title: 'Клиент',
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
+      render: (_, record) => (
+        <div>
+          <div style={{ fontWeight: 600, fontSize: isMobile ? 15 : 14 }}>
+            {record.name || '-'}
+          </div>
+          {isMobile ? (
+            <div style={{ marginTop: 4 }}>
+              {record.phone ? (
+                <a
+                  href={`tel:${record.phone}`}
+                  style={{ color: '#1677ff', fontSize: 13 }}
+                >
+                  {record.phone}
+                </a>
+              ) : (
+                <span style={{ color: '#999', fontSize: 13 }}>Без телефона</span>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ),
     },
     {
       title: 'Телефон',
       dataIndex: 'phone',
       key: 'phone',
-      render: (phone) => <a href={`tel:${phone}`}>{phone}</a>,
+      responsive: ['md'],
+      render: (phone) =>
+        phone ? <a href={`tel:${phone}`}>{phone}</a> : <span>-</span>,
     },
     {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
-      responsive: ['md'], // скрываем на мобилке
+      responsive: ['md'],
       ellipsis: true,
+      render: (email) =>
+        email ? (
+          <a href={`mailto:${email}`}>{email}</a>
+        ) : (
+          <span style={{ color: '#999' }}>—</span>
+        ),
     },
     {
-      title: 'Дата создания',
+      title: 'Создан',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      responsive: ['md'], // скрываем на мобилке
+      responsive: ['lg'],
       ellipsis: true,
-      render: (date) => {
-        if (!date) return '-';
-        const d = new Date(date);
-        return d.toLocaleDateString('ru-RU', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-      }
+      render: (date) => formatDate(date),
     },
     {
-      title: 'Активен',
+      title: 'Статус',
       dataIndex: 'isActive',
       key: 'isActive',
-      responsive: ['lg'],
-      render: (val) => val ? 'Да' : 'Нет'
+      responsive: ['sm'],
+      render: (val) => (
+        <Tag color={val ? 'green' : 'red'}>
+          {val ? 'Активен' : 'Неактивен'}
+        </Tag>
+      ),
     },
     {
       title: 'Действия',
       key: 'actions',
+      width: isMobile ? 110 : 150,
       render: (_, record) => (
-        <Space >
+        <Space size={isMobile ? 4 : 8}>
           <Button
             type="link"
             size={isMobile ? 'small' : 'middle'}
+            icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
+            style={{ paddingInline: isMobile ? 4 : 8 }}
           >
-            Ред.
+            {!isMobile ? 'Редактировать' : ''}
           </Button>
-          <Button
-            type="link"
-            danger
-            size={isMobile ? 'small' : 'middle'}
-            onClick={() => handleDelete(record.id)}
+
+          <Popconfirm
+            title="Удалить клиента?"
+            okText="Да"
+            cancelText="Нет"
+            onConfirm={() => handleDelete(record.id)}
           >
-            Уд.
-          </Button>
+            <Button
+              type="link"
+              danger
+              size={isMobile ? 'small' : 'middle'}
+              icon={<DeleteOutlined />}
+              style={{ paddingInline: isMobile ? 4 : 8 }}
+            >
+              {!isMobile ? 'Удалить' : ''}
+            </Button>
+          </Popconfirm>
         </Space>
-      )
+      ),
     }
   ];
 
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Space
-        style={{ marginBottom: 16, width: '100%' }}
-      >
-        <Input.Search
-          placeholder="Поиск клиента"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{ width: isMobile ? '100%' : 250 }}
-        />
-
-        <Button
-          type="primary"
-          onClick={handleAdd}
-          block={isMobile}
-        >
-          Добавить клиента
-        </Button>
-      </Space>
-
-      <Table
-        columns={columns}
-        dataSource={filteredData}
-        rowKey="id"
-        bordered
-        scroll={{ x: true }}
-        size="small"
-        pagination={{
-          pageSize: 10,
-          showSizeChanger: false
+    <div style={{ padding: isMobile ? 0 : 12 }}>
+      <Card
+        bordered={false}
+        style={{
+          borderRadius: 16,
+          boxShadow: '0 6px 24px rgba(0,0,0,0.06)',
         }}
-      />
+        bodyStyle={{ padding: isMobile ? 12 : 20 }}
+      >
+        <Space
+          direction={isMobile ? 'vertical' : 'horizontal'}
+          style={{ marginBottom: 16, width: '100%' }}
+          size={12}
+        >
+          <Input.Search
+            placeholder="Поиск клиента"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            allowClear
+            size={isMobile ? 'large' : 'middle'}
+            prefix={<UserOutlined />}
+            style={{
+              width: isMobile ? '100%' : 320,
+            }}
+          />
+
+          <Button
+            type="primary"
+            onClick={handleAdd}
+            block={isMobile}
+            size={isMobile ? 'large' : 'middle'}
+            icon={<PlusOutlined />}
+            style={{
+              height: isMobile ? 44 : undefined,
+              fontWeight: 600,
+              borderRadius: 10,
+            }}
+          >
+            Добавить клиента
+          </Button>
+        </Space>
+
+        <Table
+          columns={columns}
+          dataSource={filteredData}
+          rowKey="id"
+          bordered={false}
+          loading={isLoading}
+          scroll={{ x: 760 }}
+          size={isMobile ? 'small' : 'middle'}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: false,
+          }}
+        />
+      </Card>
 
       <Modal
         title={editingClient ? 'Редактировать клиента' : 'Создать клиента'}
@@ -190,8 +282,10 @@ export default function Clients() {
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
         okText="Сохранить"
-        width={isMobile ? '100%' : 500}
-        style={isMobile ? { top: 0 } : {}}
+        cancelText="Отмена"
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 0, paddingBottom: 0 } : {}}
+        bodyStyle={isMobile ? { padding: 16 } : { padding: 20 }}
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -199,7 +293,11 @@ export default function Clients() {
             name="name"
             rules={[{ required: true, message: 'Введите имя' }]}
           >
-            <Input />
+            <Input
+              size={isMobile ? 'large' : 'middle'}
+              prefix={<UserOutlined />}
+              placeholder="Введите имя клиента"
+            />
           </Form.Item>
 
           <Form.Item
@@ -207,11 +305,19 @@ export default function Clients() {
             name="phone"
             rules={[{ required: true, message: 'Введите телефон' }]}
           >
-            <Input />
+            <Input
+              size={isMobile ? 'large' : 'middle'}
+              prefix={<PhoneOutlined />}
+              placeholder="Введите телефон"
+            />
           </Form.Item>
 
           <Form.Item label="Email" name="email">
-            <Input />
+            <Input
+              size={isMobile ? 'large' : 'middle'}
+              prefix={<MailOutlined />}
+              placeholder="Введите email"
+            />
           </Form.Item>
 
           <Form.Item

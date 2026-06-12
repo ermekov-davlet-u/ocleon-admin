@@ -83,14 +83,14 @@ export default function Branches() {
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => handleEdit(record)}>Редактировать</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>Удалить</Button>
+          {/* <Button type="link" danger onClick={() => handleDelete(record.id)}>Удалить</Button> */}
         </Space>
       )
     }
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Space style={{ marginBottom: 16 }}>
         <Input.Search
           placeholder="Поиск филиала"
