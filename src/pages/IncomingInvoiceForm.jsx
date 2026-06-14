@@ -94,7 +94,7 @@ const IncomingInvoiceForm = () => {
           Удалить
         </Button>
       ),
-    },
+    }, 
   ];
 
   return (
