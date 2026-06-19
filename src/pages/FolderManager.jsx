@@ -5,8 +5,8 @@ import {
 } from 'antd';
 import {
     FolderOutlined, FileOutlined, ArrowLeftOutlined,
-    PlusOutlined, SyncOutlined, SearchOutlined, HomeOutlined, 
-    DeleteOutlined, UploadOutlined, CloseOutlined
+    PlusOutlined, SyncOutlined, SearchOutlined, HomeOutlined,
+    DeleteOutlined, UploadOutlined, CloseOutlined, ScissorOutlined
 } from '@ant-design/icons';
 // Импортируем хуки из нашего единого fileApi
 import {
@@ -59,9 +59,10 @@ export default function FolderManager() {
     // Навигационный стейт
     const [history, setHistory] = useState([{ id: null, name: 'Корневая папка' }]);
     const [searchQuery, setSearchQuery] = useState('');
-    
+
     // Стейт для выбранного файла (для большого просмотра справа)
     const [selectedFile, setSelectedFile] = useState(null);
+    const [isCuttingLoading, setIsCuttingLoading] = useState(false);
 
     // Состояние модалки
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -149,13 +150,13 @@ export default function FolderManager() {
             folders.forEach(f => {
                 if (f.files) {
                     f.files.forEach(file => {
-                        // Пропускаем .plt файлы
+                        // Пропускаем .plt файлы в выводе интерфейса
                         if (file.name.toLowerCase().includes(query) && !file.name.toLowerCase().endsWith('.plt')) {
                             const fullPath = buildFolderPath(f.id, folders);
-                            filteredFiles.push({ 
-                                ...file, 
-                                folderName: f.name, 
-                                folderPath: fullPath 
+                            filteredFiles.push({
+                                ...file,
+                                folderName: f.name,
+                                folderPath: fullPath
                             });
                         }
                     });
@@ -177,12 +178,12 @@ export default function FolderManager() {
             // Обогащаем файлы текущей папки её полным путем
             const files = (activeData?.files || [])
                 .filter(file => !file.name.toLowerCase().endsWith('.plt'))
-                .map(file => ({ 
-                    ...file, 
-                    folderName: activeData?.name, 
-                    folderPath: fullPath 
+                .map(file => ({
+                    ...file,
+                    folderName: activeData?.name,
+                    folderPath: fullPath
                 }));
-            
+
             return {
                 visibleFolders: activeData?.children || [],
                 visibleFiles: files
@@ -193,31 +194,63 @@ export default function FolderManager() {
     // Вычисляем точный URL до SVG файла на удаленном сервере
     const selectedFileSrc = useMemo(() => {
         if (!selectedFile) return '';
-        
+
         const host = 'https://ocleon.333.kg/disk';
         const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
-        
+
         // Собираем вид: https://ocleon.333.kg/disk/папка1/папка2/имя_файла.svg
         return `${host}${folderPath}/${selectedFile.name}`;
     }, [selectedFile]);
 
+    // Хендлер отправки файла на локальный сервер резки
+    const handleCut = async () => {
+        if (!selectedFile) return;
+
+        setIsCuttingLoading(true);
+        try {
+            // Получаем чистое имя файла без расширения и добавляем .plt
+            const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'));
+            const pltFileName = `${baseName}.plt`;
+
+            const host = 'https://ocleon.333.kg/disk';
+            const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
+            // Ссылка на сам .plt файл на удаленном сервере
+            const pltFileUrl = `${host}${folderPath}/${pltFileName}`;
+
+            // 1. Скачиваем .plt файл с сервера в виде Blob
+            const response = await fetch(pltFileUrl);
+            if (!response.ok) {
+                throw new Error(`Не удалось получить файл .plt с сервера. Статус: ${response.status}`);
+            }
+            const fileBlob = await response.blob();
+
+            // 2. Формируем FormData для отправки на localhost
+            const formdata = new FormData();
+            // Передаем blob, а третьим параметром — желаемое имя/путь файла
+            formdata.append("file", fileBlob, pltFileName);
+
+            const requestOptions = {
+                method: "POST",
+                body: formdata,
+                redirect: "follow"
+            };
+
+            // 3. Отправляем на локальный контроллер резки
+            const localResponse = await fetch("http://localhost:5000/cut", requestOptions);
+            const result = await localResponse.text();
+
+            console.log(result);
+            message.success(`Задание на резку файла "${pltFileName}" успешно отправлено!`);
+        } catch (error) {
+            console.error(error);
+            message.error(error.message || 'Ошибка при отправке файла на резку');
+        } finally {
+            setIsCuttingLoading(false);
+        }
+    };
+
     return (
         <Layout style={{ minHeight: 'calc(100vh - 140px)', background: '#f5f5f5' }}>
-            {/* <Header style={{ background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '0 24px' }}>
-                <div style={{ fontSize: '18px', fontWeight: 600, color: '#141414' }}>
-                    📂 Файловый менеджер
-                </div>
-                <Button
-                    type="primary"
-                    ghost
-                    icon={<SyncOutlined spin={isSyncing} />}
-                    onClick={handleSync}
-                    disabled={isFetchLoading || isSyncing}
-                >
-                    {isSyncing ? 'Синхронизация...' : 'Синхронизировать диск'}
-                </Button>
-            </Header> */}
-
             <Content style={{ maxWidth: '1900px', width: 'calc(100% - 24px)', margin: '0 auto' }}>
 
                 {/* Тулбар */}
@@ -289,10 +322,10 @@ export default function FolderManager() {
                         <Empty description="Папка пуста или ничего не найдено" style={{ marginTop: '60px' }} />
                     ) : (
                         <Row gutter={[24, 24]}>
-                            
+
                             {/* Сетка элементов */}
                             <Col xs={24} lg={selectedFile ? 16 : 24} style={{ transition: 'all 0.3s' }}>
-                                
+
                                 {/* ПАПКИ */}
                                 {visibleFolders.length > 0 && (
                                     <div style={{ marginBottom: '24px' }}>
@@ -314,23 +347,6 @@ export default function FolderManager() {
                                                                 </span>
                                                             </Tooltip>
                                                         </div>
-
-                                                        {/* <Popconfirm
-                                                            title="Удалить папку?"
-                                                            description="Это удалит папку и всё её содержимое."
-                                                            onConfirm={(e) => handleDeleteFolder(e, folder.id)}
-                                                            onCancel={(e) => e.stopPropagation()}
-                                                            okText="Да"
-                                                            cancelText="Нет"
-                                                        >
-                                                            <Button
-                                                                type="text"
-                                                                danger
-                                                                icon={<DeleteOutlined />}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                style={{ flexShrink: 0 }}
-                                                            />
-                                                        </Popconfirm> */}
                                                     </Card>
                                                 </Col>
                                             ))}
@@ -340,7 +356,7 @@ export default function FolderManager() {
 
                                 {/* ФАЙЛЫ */}
                                 {visibleFiles.length > 0 && (
-                                    <div>
+                                    <div style={{ marginBottom: '24px' }}>
                                         <h3 style={{ marginBottom: '12px', color: '#595959' }}>Файлы ({visibleFiles.length})</h3>
                                         <Row gutter={[16, 16]}>
                                             {visibleFiles.map((file) => {
@@ -352,9 +368,9 @@ export default function FolderManager() {
                                                             hoverable
                                                             bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}
                                                             onClick={() => setSelectedFile(file)}
-                                                            style={{ 
-                                                                borderRadius: '8px', 
-                                                                background: isCurrentSelected ? '#e6f7ff' : '#fafafa', 
+                                                            style={{
+                                                                borderRadius: '8px',
+                                                                background: isCurrentSelected ? '#e6f7ff' : '#fafafa',
                                                                 borderColor: isCurrentSelected ? '#1890ff' : '#f0f0f0',
                                                                 boxShadow: isCurrentSelected ? '0 0 0 2px rgba(24, 144, 255, 0.2)' : 'none',
                                                                 transition: 'all 0.2s'
@@ -375,36 +391,36 @@ export default function FolderManager() {
                                 )}
                             </Col>
 
-                            {/* БОЛЬШАЯ ПАНЕЛЬ ПРЕДПРОСМОТРА SVG СГЕНЕРИРОВАННАЯ ПО ПОЛНОМУ ПУТИ */}
+                            {/* БОЛЬШАЯ ПАНЕЛЬ ПРЕДПРОСМОТРА С КНОПКОЙ РЕЗКИ */}
                             {selectedFile && (
                                 <Col xs={24} lg={8}>
                                     <Card
                                         title={<span style={{ fontWeight: 600 }}>Просмотр чертежа</span>}
                                         extra={<Button type="text" shape="circle" icon={<CloseOutlined />} onClick={() => setSelectedFile(null)} />}
-                                        style={{ 
-                                            borderRadius: '12px', 
-                                            position: 'sticky', 
-                                            top: '24px', 
+                                        style={{
+                                            borderRadius: '12px',
+                                            position: 'sticky',
+                                            top: '24px',
                                             boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
                                             border: '1px solid #d9d9d9'
                                         }}
                                     >
-                                        <div style={{ 
-                                            width: '100%', 
-                                            height: '350px', 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center', 
-                                            background: '#fff', 
-                                            borderRadius: '8px', 
+                                        <div style={{
+                                            width: '100%',
+                                            height: '350px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            background: '#fff',
+                                            borderRadius: '8px',
                                             border: '1px solid #f0f0f0',
                                             padding: '16px',
                                             marginBottom: '16px',
                                             overflow: 'hidden'
                                         }}>
-                                            <img 
-                                                src={selectedFileSrc} 
-                                                alt={selectedFile.name} 
+                                            <img
+                                                src={selectedFileSrc}
+                                                alt={selectedFile.name}
                                                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                                                 onError={(e) => {
                                                     message.error('Ошибка загрузки SVG. Проверьте правильность пути на сервере.');
@@ -418,11 +434,25 @@ export default function FolderManager() {
                                             <div style={{ fontWeight: 600, fontSize: '15px', color: '#262626', wordBreak: 'break-all', marginBottom: '12px' }}>
                                                 {selectedFile.name}
                                             </div>
-                                            
+
                                             <div style={{ color: '#8c8c8c', fontSize: '12px', marginBottom: '4px' }}>Полный путь ссылки:</div>
-                                            <div style={{ fontWeight: 500, color: '#1890ff', fontSize: '13px', wordBreak: 'break-all' }}>
+                                            <div style={{ fontWeight: 500, color: '#1890ff', fontSize: '13px', wordBreak: 'break-all', marginBottom: '20px' }}>
                                                 {selectedFileSrc}
                                             </div>
+
+                                            {/* Кнопка запуска лазера / резки */}
+                                            <Button
+                                                type="primary"
+                                                danger
+                                                block
+                                                size="large"
+                                                icon={<ScissorOutlined />}
+                                                loading={isCuttingLoading}
+                                                onClick={handleCut}
+                                                style={{ borderRadius: '8px', fontWeight: 600, height: '45px' }}
+                                            >
+                                                Резать (.plt)
+                                            </Button>
                                         </div>
                                     </Card>
                                 </Col>
