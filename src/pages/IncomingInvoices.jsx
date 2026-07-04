@@ -1,10 +1,12 @@
-import React from 'react';
-import { Table, Button, Tag, Space, message, Modal, Grid, Card } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Tag, Space, message, Modal, Grid, Card, Form, Input, InputNumber, Switch, Divider } from 'antd';
+import { EditOutlined } from '@ant-design/icons';
 import {
   useGetOrdersQuery,
   useDeleteOrderMutation,
   useChangeOrderStatusMutation,
   useCreateOrderMutation,
+  useUpdateOrderMutation, // <-- Убедитесь, что мутация добавлена в orderApi
 } from '../store/api/orderApi';
 
 const { useBreakpoint } = Grid;
@@ -41,6 +43,12 @@ const CuttingOrdersTable = () => {
   const [deleteOrder] = useDeleteOrderMutation();
   const [changeStatus] = useChangeOrderStatusMutation();
   const [createOrder] = useCreateOrderMutation();
+  const [updateOrder] = useUpdateOrderMutation(); // <-- Подключаем обновление
+
+  // Состояния для модалки редактирования
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [form] = Form.useForm();
 
   const handleDelete = (id) => {
     Modal.confirm({
@@ -71,24 +79,43 @@ const CuttingOrdersTable = () => {
     }
   };
 
-  const handleRecreateOrder = async (record) => {
-    try {
-      await createOrder({
-        cuttingJobId: record.cuttingJob?.id,
-        quantity: record.quantity,
-        notes: record.notes,
-        clientName: record.client?.name,
-        clientPhone: record.client?.phone,
-        clientEmail: record.client?.email,
-        discountId: record.discount?.id,
-        summa: record.finalAmount,
-      }).unwrap();
+  // Открытие модалки и предзаполнение формы данными
+  const handleOpenEditModal = (record) => {
+    setEditingRecord(record);
+    form.setFieldsValue({
+      clientPhone: record.client?.phone || '',
+      clientName: record.client?.name || '',
+      clientEmail: record.client?.email || '',
+      quantity: record.quantity || 1,
+      isWarrantyOrder: record.isWarrantyOrder || false,
+      fileId: record.file?.id || null,
+    });
+    setIsEditModalOpen(true);
+  };
 
-      message.success('Заказ повторно создан!');
+  // Сохранение отредактированных данных
+  const handleSaveEdit = async () => {
+    try {
+      const values = await form.validateFields();
+
+      // Формируем DTO для бэкенда @Patch(':id')
+      const dto = {
+        clientPhone: values.clientPhone,
+        clientName: values.clientName || 'Не указано',
+        clientEmail: values.clientEmail || undefined,
+        quantity: values.quantity,
+        isWarrantyOrder: values.isWarrantyOrder,
+        fileId: values.fileId ? Number(values.fileId) : values.fileId === '' ? null : undefined,
+      };
+
+      await updateOrder({ id: editingRecord.id, ...dto }).unwrap();
+      message.success('Заказ успешно обновлен');
+      setIsEditModalOpen(false);
+      setEditingRecord(null);
       refetch();
     } catch (err) {
       console.error(err);
-      message.error('Ошибка при повторном создании');
+      message.error('Ошибка при сохранении изменений');
     }
   };
 
@@ -108,53 +135,30 @@ const CuttingOrdersTable = () => {
     const isDone = record.status === CuttingOrderStatus.DONE;
     const isDefect = record.status === CuttingOrderStatus.DEFECT;
 
-    if (isMobile) {
-      return (
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
-          {!isDone && !isDefect && (
-            <>
-              <Button
-                block
-                size="small"
-                type="primary"
-                onClick={() =>
-                  handleStatusChange(record.id, CuttingOrderStatus.DONE)
-                }
-              >
-                Готово
-              </Button>
-            </>
-          )}
-
-          <Button
-            block
-            size="small"
-            danger
-            onClick={() => handleDelete(record.id)}
-          >
-            Удалить
-          </Button>
-        </Space>
-      );
-    }
-
     return (
-      <Space wrap>
+      <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? '100%' : 'auto' }} wrap={!isMobile} size={8}>
         {!isDone && !isDefect && (
-          <>
-            <Button
-              size="small"
-              type="primary"
-              onClick={() =>
-                handleStatusChange(record.id, CuttingOrderStatus.DONE)
-              }
-            >
-              Готово
-            </Button>
-          </>
+          <Button
+            block={isMobile}
+            size="small"
+            type="primary"
+            onClick={() => handleStatusChange(record.id, CuttingOrderStatus.DONE)}
+          >
+            Готово
+          </Button>
         )}
 
-        <Button size="small" danger onClick={() => handleDelete(record.id)}>
+        {/* Кнопка Редактировать */}
+        <Button
+          block={isMobile}
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleOpenEditModal(record)}
+        >
+          Редактировать
+        </Button>
+
+        <Button block={isMobile} size="small" danger onClick={() => handleDelete(record.id)}>
           Удалить
         </Button>
       </Space>
@@ -169,42 +173,29 @@ const CuttingOrdersTable = () => {
         <Card
           size="small"
           bodyStyle={{ padding: 12 }}
-          style={{
-            borderRadius: 12,
-          }}
+          style={{ borderRadius: 12 }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <b>Заказ #{record.id}</b>
-            <Tag color={statusColors[record.status]}>
-              {statusLabels[record.status] || record.status}
-            </Tag>
+            <Space>
+              {record.isWarrantyOrder && <Tag color="purple">Гарантия</Tag>}
+              <Tag color={statusColors[record.status]}>
+                {statusLabels[record.status] || record.status}
+              </Tag>
+            </Space>
           </div>
 
           <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
-            <div>
-              <b>Телефон:</b> {record.client?.phone || '-'}
-            </div>
-            <div>
-              <b>Материал:</b> {record.cuttingJob?.material?.name || '-'}
-            </div>
-            <div>
-              <b>Тип брони:</b> {record.cuttingJob?.armorType?.name || '-'}
-            </div>
-            <div>
-              <b>Устройство:</b> {record.cuttingJob?.deviceType?.name || '-'}
-            </div>
-            <div>
-              <b>Кол-во:</b> {record.quantity ?? '-'}
-            </div>
-            <div>
-              <b>Сумма:</b> {record.totalAmount ?? '-'}
-            </div>
-            <div>
-              <b>Итог:</b> {record.finalAmount ?? '-'}
-            </div>
-            <div>
-              <b>Дата:</b> {formatDate(record.createdAt)}
-            </div>
+            <div><b>Телефон:</b> {record.client?.phone || '-'}</div>
+            <div><b>Клиент:</b> {record.client?.name || '-'}</div>
+            <div><b>Материал:</b> {record.cuttingJob?.material?.name || '-'}</div>
+            <div><b>Тип брони:</b> {record.cuttingJob?.armorType?.name || '-'}</div>
+            <div><b>Устройство:</b> {record.cuttingJob?.deviceType?.name || '-'}</div>
+            {record.file && <div><b>ID Файла:</b> #{record.file.id}</div>}
+            <div><b>Кол-во:</b> {record.quantity ?? '-'}</div>
+            <div><b>Сумма:</b> {record.totalAmount ?? '-'}</div>
+            <div><b>Итог:</b> {record.finalAmount ?? '-'}</div>
+            <div><b>Дата:</b> {formatDate(record.createdAt)}</div>
           </div>
 
           <div style={{ marginTop: 12 }}>{renderActions(record)}</div>
@@ -214,118 +205,121 @@ const CuttingOrdersTable = () => {
   ];
 
   const desktopColumns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      sorter: (a, b) => a.id - b.id,
-      responsive: ['md'],
-      width: 80,
-    },
+    { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a, b) => a.id - b.id, width: 70 },
     {
       title: 'Клиент',
-      dataIndex: ['client', 'phone'],
-      key: 'phone',
-      responsive: ['md'],
+      key: 'client',
+      render: (_, r) => (
+        <div>
+          <div>{r.client?.phone || '-'}</div>
+          <div style={{ fontSize: 11, color: '#888' }}>{r.client?.name}</div>
+        </div>
+      )
     },
     {
       title: 'Материал',
       key: 'material',
       render: (_, record) => record.cuttingJob?.material?.name || '-',
-      filters: Array.from(
-        new Set(orders?.map((o) => o.cuttingJob?.material?.name || '-') || [])
-      ).map((n) => ({ text: n, value: n })),
-      onFilter: (value, record) =>
-        (record.cuttingJob?.material?.name || '-') === value,
     },
     {
       title: 'Тип брони',
       key: 'armorType',
       render: (_, record) => record.cuttingJob?.armorType?.name || '-',
-      filters: Array.from(
-        new Set(orders?.map((o) => o.cuttingJob?.armorType?.name || '-') || [])
-      ).map((n) => ({ text: n, value: n })),
-      onFilter: (value, record) =>
-        (record.cuttingJob?.armorType?.name || '-') === value,
     },
     {
       title: 'Устройство',
       key: 'deviceType',
       render: (_, record) => record.cuttingJob?.deviceType?.name || '-',
-      filters: Array.from(
-        new Set(orders?.map((o) => o.cuttingJob?.deviceType?.name || '-') || [])
-      ).map((n) => ({ text: n, value: n })),
-      onFilter: (value, record) =>
-        (record.cuttingJob?.deviceType?.name || '-') === value,
     },
-    {
-      title: 'Кол-во',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      sorter: (a, b) => a.quantity - b.quantity,
-      width: 90,
-    },
+    { title: 'Кол-во', dataIndex: 'quantity', key: 'quantity', width: 80 },
     {
       title: 'Статус',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => (
-        <Tag color={statusColors[status]}>
-          {statusLabels[status] || status}
-        </Tag>
+      render: (status, r) => (
+        <Space direction="vertical" size={2}>
+          <Tag color={statusColors[status]}>{statusLabels[status] || status}</Tag>
+          {r.isWarrantyOrder && <Tag color="purple" size="small">Гарантийный</Tag>}
+        </Space>
       ),
-      filters: Object.values(CuttingOrderStatus).map((s) => ({
-        text: statusLabels[s] || s,
-        value: s,
-      })),
-      onFilter: (value, record) => record.status === value,
       width: 130,
     },
-    {
-      title: 'Сумма',
-      dataIndex: 'totalAmount',
-      key: 'totalAmount',
-      sorter: (a, b) => (a.totalAmount || 0) - (b.totalAmount || 0),
-      width: 100,
-    },
-    {
-      title: 'Итоговая сумма',
-      dataIndex: 'finalAmount',
-      key: 'finalAmount',
-      sorter: (a, b) => (a.finalAmount || 0) - (b.finalAmount || 0),
-      width: 130,
-    },
-    {
-      title: 'Дата создания',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      responsive: ['md'],
-      render: formatDate,
-      sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
-      width: 160,
-    },
-    {
-      title: 'Действия',
-      key: 'actions',
-      render: (_, record) => renderActions(record),
-      width: 220,
-      fixed: 'right',
-    },
+    { title: 'Сумма', dataIndex: 'totalAmount', key: 'totalAmount', width: 90 },
+    { title: 'Итого', dataIndex: 'finalAmount', key: 'finalAmount', width: 90 },
+    { title: 'Дата создания', dataIndex: 'createdAt', key: 'createdAt', render: formatDate, width: 140 },
+    { title: 'Действия', key: 'actions', render: (_, record) => renderActions(record), width: 260, fixed: 'right' },
   ];
 
   return (
-    <Table
-      rowKey="id"
-      loading={isLoading}
-      dataSource={orders || []}
-      columns={isMobile ? mobileColumns : desktopColumns}
-      scroll={isMobile ? undefined : { x: 1200 }}
-      size={isMobile ? 'middle' : 'small'}
-      pagination={{
-        pageSize: isMobile ? 5 : 10,
-        showSizeChanger: !isMobile,
-      }}
-    />
+    <>
+      <Table
+        rowKey="id"
+        loading={isLoading}
+        dataSource={orders || []}
+        columns={isMobile ? mobileColumns : desktopColumns}
+        scroll={isMobile ? undefined : { x: 1300 }}
+        size={isMobile ? 'middle' : 'small'}
+        pagination={{ pageSize: isMobile ? 5 : 10 }}
+      />
+
+      {/* Модальное окно редактирования */}
+      <Modal
+        title={`Редактирование заказа #${editingRecord?.id}`}
+        open={isEditModalOpen}
+        onOk={handleSaveEdit}
+        onCancel={() => {
+          setIsEditModalOpen(false);
+          setEditingRecord(null);
+        }}
+        okText="Сохранить"
+        cancelText="Отмена"
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+
+          <h3>Данные клиента</h3>
+          <Form.Item
+            name="clientPhone"
+            label="Номер телефона"
+            rules={[{ required: true, message: 'Введите телефон клиента' }]}
+          >
+            <Input placeholder="Например, +996..." />
+          </Form.Item>
+
+          <Form.Item name="clientName" label="Имя клиента">
+            <Input placeholder="Имя (если пусто, запишется 'Не указано')" />
+          </Form.Item>
+
+          <Form.Item name="clientEmail" label="Email клиента">
+            <Input type="email" placeholder="example@mail.com" />
+          </Form.Item>
+
+          <Divider style={{ margin: '12px 0' }} />
+          <h3>Параметры заказа</h3>
+
+          <Form.Item
+            name="quantity"
+            label="Количество"
+            rules={[{ required: true, message: 'Укажите количество' }]}
+          >
+            <InputNumber min={1} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item name="fileId" label="ID прикрепленного файла (опционально)">
+            <Input placeholder="Оставьте пустым или введите ID файла" />
+          </Form.Item>
+
+          <Form.Item
+            name="isWarrantyOrder"
+            label="Установить на гарантию (Гарантийная оклейка)"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="Да" unCheckedChildren="Нет" />
+          </Form.Item>
+
+        </Form>
+      </Modal>
+    </>
   );
 };
 

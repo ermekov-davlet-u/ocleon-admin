@@ -18,6 +18,14 @@ export const orderApi = createApi({
       }),
       invalidatesTags: ['CuttingOrder'],
     }),
+    createSimpleOrder: builder.mutation({
+      query: (body) => ({
+        url: 'cutting-orders/simple',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['CuttingOrder'],
+    }),
     getClientHistory: builder.query({
       query: (phone) => `/cutting-orders/client-history?phone=${encodeURIComponent(phone)}`,
     }),
@@ -72,4 +80,5 @@ export const {
   useUseWarrantyMutation,
   useChangeOrderStatusMutation,
   useUseDefectReworkMutation,
+  useCreateSimpleOrderMutation
 } = orderApi;
