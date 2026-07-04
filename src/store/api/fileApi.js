@@ -57,7 +57,7 @@ export const fileApi = createApi({
         syncFolders: builder.mutation({
             query: () => ({
                 url: '/folder/syncfolder',
-                method: 'GET',
+                method: 'POST',
             }),
             invalidatesTags: [{ type: 'File', id: 'LIST' }],
         }),
