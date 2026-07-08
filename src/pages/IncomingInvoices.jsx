@@ -8,6 +8,7 @@ import {
   useCreateOrderMutation,
   useUpdateOrderMutation, // <-- Убедитесь, что мутация добавлена в orderApi
 } from '../store/api/orderApi';
+import { useGetDeviceTypesQuery } from '../store/api/cuttingApi';
 
 const { useBreakpoint } = Grid;
 
@@ -42,6 +43,7 @@ const CuttingOrdersTable = () => {
   const { data: orders, isLoading, refetch } = useGetOrdersQuery();
   const [deleteOrder] = useDeleteOrderMutation();
   const [changeStatus] = useChangeOrderStatusMutation();
+  const { data: deviceTypes = [] } = useGetDeviceTypesQuery();
   const [createOrder] = useCreateOrderMutation();
   const [updateOrder] = useUpdateOrderMutation(); // <-- Подключаем обновление
 
@@ -105,7 +107,7 @@ const CuttingOrdersTable = () => {
         clientEmail: values.clientEmail || undefined,
         quantity: values.quantity,
         isWarrantyOrder: values.isWarrantyOrder,
-        fileId: values.fileId ? Number(values.fileId) : values.fileId === '' ? null : undefined,
+        totalAmount: values.totalAmount ?? 0,
       };
 
       await updateOrder({ id: editingRecord.id, ...dto }).unwrap();
@@ -305,13 +307,13 @@ const CuttingOrdersTable = () => {
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item name="fileId" label="ID прикрепленного файла (опционально)">
-            <Input placeholder="Оставьте пустым или введите ID файла" />
+          <Form.Item name="totalAmount" label="Сумма">
+            <Input type={"number"} placeholder="Сумма" />
           </Form.Item>
 
           <Form.Item
             name="isWarrantyOrder"
-            label="Установить на гарантию (Гарантийная оклейка)"
+            label="Гарантийная оклейка"
             valuePropName="checked"
           >
             <Switch checkedChildren="Да" unCheckedChildren="Нет" />
