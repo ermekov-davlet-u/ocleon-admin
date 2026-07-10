@@ -71,6 +71,24 @@ export const fileApi = createApi({
             }),
             invalidatesTags: [{ type: 'File', id: 'LIST' }],
         }),
+
+        updateFile: builder.mutation({
+            query: ({ id, ...body }) => ({
+                url: `/file/${id}`,
+                method: 'PATCH',
+                body,
+            }),
+            invalidatesTags: ['Folders'],
+        }),
+
+        deleteFile: builder.mutation({
+            query: (id) => ({
+                url: `/file/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Folders'],
+        }),
+
     }),
 });
 
@@ -82,4 +100,6 @@ export const {
     useDeleteFolderMutation,
     useUploadFileMutation,
     useSyncFoldersMutation,
+    useDeleteFileMutation,
+    useUpdateFileMutation
 } = fileApi;

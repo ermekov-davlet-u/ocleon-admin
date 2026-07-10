@@ -1,65 +1,67 @@
 import React, { useState, useMemo } from 'react';
 import {
     Layout, Breadcrumb, Input, Button, Card, Row, Col,
-    Modal, Form, message, Spin, Empty, Tooltip, Space, Upload
+    Modal, Form, message, Spin, Empty, Tooltip, Space, Upload, Popconfirm
 } from 'antd';
 import {
     FolderOutlined, FileOutlined, ArrowLeftOutlined,
     PlusOutlined, SearchOutlined, HomeOutlined,
-    UploadOutlined, CloseOutlined, ScissorOutlined
+    UploadOutlined, CloseOutlined, ScissorOutlined,
+    DeleteOutlined, EditOutlined
 } from '@ant-design/icons';
 
-// Импортируем хуки из fileApi
 import {
     useGetFoldersQuery,
     useCreateFolderMutation,
-    useUploadFileMutation
+    useUploadFileMutation,
+    useUpdateFolderMutation,
+    useDeleteFolderMutation,
+    useDeleteFileMutation,
+    useUpdateFileMutation
 } from '../store/api/fileApi';
 
-// Импортируем хуки из orderApi
-import {
-    useCreateSimpleOrderMutation // Предполагаем, что ты добавил туда или используешь метод для /simple
-} from '../store/api/orderApi';
+import { useCreateSimpleOrderMutation } from '../store/api/orderApi';
 
 const { Content } = Layout;
 
+// (Функция buildFolderPath остается без изменений)
 const buildFolderPath = (folderId, allFolders) => {
     if (!folderId) return '';
     const pathSegments = [];
     let currentId = folderId;
-
     for (let depth = 0; depth < 10; depth++) {
         const currentFolder = allFolders.find(f => f.id === currentId);
         if (!currentFolder) break;
-
         pathSegments.unshift(currentFolder.name);
-
         const parentFolder = allFolders.find(f => f.children?.some(child => child.id === currentId));
-        if (parentFolder) {
-            currentId = parentFolder.id;
-        } else {
-            break;
-        }
+        if (parentFolder) { currentId = parentFolder.id; } else { break; }
     }
-
     return pathSegments.join('/');
 };
 
 export default function FolderManager() {
-    const { data: folders = [], isLoading: isFetchLoading } = useGetFoldersQuery();
+    const { data: folders = [], isLoading: isFetchLoading, refetch: refetchFolders } = useGetFoldersQuery();
     const [createFolder, { isLoading: isCreating }] = useCreateFolderMutation();
     const [uploadFile, { isLoading: isUploading }] = useUploadFileMutation();
-
-    // Мутация для быстрого заказа
     const [createOrder, { isLoading: isOrderCreating }] = useCreateSimpleOrderMutation();
+
+    // Подключаем новые мутации
+    const [updateFolder] = useUpdateFolderMutation();
+    const [deleteFolder] = useDeleteFolderMutation();
+    const [updateFile] = useUpdateFileMutation();
+    const [deleteFile] = useDeleteFileMutation();
 
     const [history, setHistory] = useState([{ id: null, name: 'Корневая папка' }]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [isCuttingLoading, setIsCuttingLoading] = useState(false);
+
+    // Состояния для модалок
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [renameTarget, setRenameTarget] = useState(null); // { type: 'folder'|'file', id, name }
 
     const [form] = Form.useForm();
+    const [renameForm] = Form.useForm();
     const currentFolder = useMemo(() => history[history.length - 1], [history]);
 
     // Хендлер загрузки файла
@@ -67,11 +69,9 @@ export default function FolderManager() {
         const { file, onSuccess, onError } = options;
         const formData = new FormData();
         formData.append('file', file);
-
         if (currentFolder.id !== null) {
             formData.append('folderId', currentFolder.id);
         }
-
         try {
             await uploadFile(formData).unwrap();
             message.success(`Файл "${file.name}" успешно загружен`);
@@ -97,6 +97,51 @@ export default function FolderManager() {
         }
     };
 
+    // Хендлер переименования (и папок, и файлов)
+    const handleRename = async (values) => {
+        if (!renameTarget) return;
+        try {
+            if (renameTarget.type === 'folder') {
+                await updateFolder({ id: renameTarget.id, name: values.newName }).unwrap();
+                message.success('Папка успешно переименована');
+            } else {
+                await updateFile({ id: renameTarget.id, name: values.newName }, renameTarget.id).unwrap();
+                message.success('Файл успешно переименован');
+                // Обновляем имя в сайдбаре, если этот файл сейчас выделен
+                if (selectedFile?.id === renameTarget.id) {
+                    setSelectedFile(prev => ({ ...prev, name: values.newName }));
+                }
+            }
+            setRenameTarget(null);
+            renameForm.resetFields();
+        } catch (err) {
+            message.error(err?.data?.message || 'Ошибка при переименовании');
+        }
+    };
+
+    // Хендлер удаления папки
+    const handleDeleteFolder = async (id, e) => {
+        e.stopPropagation(); // Чтобы не сработал клик по карточке папки
+        try {
+            await deleteFolder(id).unwrap();
+            message.success('Папка удалена');
+        } catch (err) {
+            message.error(err?.data?.message || 'Не удалось удалить папку');
+        }
+    };
+
+    // Хендлер удаления файла
+    const handleDeleteFile = async (id) => {
+        try {
+            await deleteFile(id).unwrap();
+            message.success('Файл удален');
+            refetchFolders()
+            setSelectedFile(null);
+        } catch (err) {
+            message.error(err?.data?.message || 'Не удалось удалить файл');
+        }
+    };
+
     const handleBreadcrumbClick = (index) => {
         setHistory(history.slice(0, index + 1));
         setSearchQuery('');
@@ -109,12 +154,13 @@ export default function FolderManager() {
         setSelectedFile(null);
     };
 
+    // Фильтрация и подготовка данных папок/файлов
     const { visibleFolders, visibleFiles } = useMemo(() => {
         if (searchQuery.trim() !== '') {
             const query = searchQuery.toLowerCase();
             const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(query));
-
             const filteredFiles = [];
+
             folders.forEach(f => {
                 if (f.files) {
                     f.files.forEach(file => {
@@ -141,7 +187,6 @@ export default function FolderManager() {
         } else {
             const activeData = folders.find(f => f.id === currentFolder.id);
             const fullPath = buildFolderPath(currentFolder.id, folders);
-
             const files = (activeData?.files || [])
                 .filter(file => !file.name.toLowerCase().endsWith('.plt'))
                 .map(file => ({
@@ -164,35 +209,23 @@ export default function FolderManager() {
         return `${host}${folderPath}/${selectedFile.name}`;
     }, [selectedFile]);
 
-    /**
-     * МАКСИМАЛЬНО ПРОСТОЙ ХЕНДЛЕР: Создание пустой резки в CRM + отправка на станок
-     */
     const handleJustCut = async () => {
         if (!selectedFile) return;
-
         setIsCuttingLoading(true);
         try {
-            // 1. Создаем быстрый заказ в CRM (стучимся в твой новый @Post("simple"))
-            // Примечание: Убедись, что в твоем RTK Query методе (createOrder) урл изменен на /simple, 
-            // либо сделай для него отдельный хук, например useCreateSimpleOrderMutation
             await createOrder({ fileId: selectedFile.id }).unwrap();
             message.success('Заказ (черновик) зарегистрирован в CRM');
 
-            // 2. Скачиваем .plt файл
             const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'));
             const pltFileName = `${baseName}.plt`;
-
             const host = 'https://ocleon.333.kg/disk';
             const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
             const pltFileUrl = `${host}${folderPath}/${pltFileName}`;
 
             const response = await fetch(pltFileUrl);
-            if (!response.ok) {
-                throw new Error(`Не удалось получить файл .plt с сервера. Статус: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Не удалось получить файл .plt. Статус: ${response.status}`);
             const fileBlob = await response.blob();
 
-            // 3. Отправляем FormData на локальный станок
             const formdata = new FormData();
             formdata.append("file", fileBlob, pltFileName);
 
@@ -202,10 +235,7 @@ export default function FolderManager() {
                 redirect: "follow"
             });
 
-            if (!localResponse.ok) {
-                throw new Error('Локальный станок отклонил файл резки');
-            }
-
+            if (!localResponse.ok) throw new Error('Локальный станок отклонил файл резки');
             message.success(`Задание "${pltFileName}" успешно отправлено на станок!`);
         } catch (error) {
             console.error(error);
@@ -292,11 +322,12 @@ export default function FolderManager() {
                                                 <Col xs={12} sm={12} md={8} lg={selectedFile ? 8 : 6} key={folder.id}>
                                                     <Card
                                                         hoverable
-                                                        bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                        className="folder-card"
+                                                        bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
                                                         onClick={() => handleFolderClick(folder.id, folder.name)}
                                                         style={{ borderRadius: '8px', border: '1px solid #f0f0f0' }}
                                                     >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden', width: '100%' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden', flex: 1 }}>
                                                             <FolderOutlined style={{ fontSize: '28px', color: '#ffc069', flexShrink: 0 }} />
                                                             <Tooltip title={folder.name}>
                                                                 <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -304,6 +335,26 @@ export default function FolderManager() {
                                                                 </span>
                                                             </Tooltip>
                                                         </div>
+                                                        {/* Кнопки управления папкой */}
+                                                        <Space onClick={(e) => e.stopPropagation()}>
+                                                            <Button
+                                                                type="text"
+                                                                size="small"
+                                                                icon={<EditOutlined style={{ color: '#1890ff' }} />}
+                                                                onClick={() => {
+                                                                    setRenameTarget({ type: 'folder', id: folder.id, name: folder.name });
+                                                                    renameForm.setFieldsValue({ newName: folder.name });
+                                                                }}
+                                                            />
+                                                            <Popconfirm
+                                                                title="Удалить папку и всё её содержимое?"
+                                                                onConfirm={(e) => handleDeleteFolder(folder.id, e)}
+                                                                okText="Да"
+                                                                cancelText="Нет"
+                                                            >
+                                                                <Button type="text" size="small" icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />} />
+                                                            </Popconfirm>
+                                                        </Space>
                                                     </Card>
                                                 </Col>
                                             ))}
@@ -347,7 +398,7 @@ export default function FolderManager() {
                                 )}
                             </Col>
 
-                            {/* САЙДБАР ПРЕДПРОСМОТРА С ПРЯМОЙ КНОПКОЙ НА СТАНOК */}
+                            {/* САЙДБАР ПРЕДПРОСМОТРА */}
                             {selectedFile && (
                                 <Col xs={24} lg={8}>
                                     <Card
@@ -387,7 +438,31 @@ export default function FolderManager() {
                                                 {selectedFileSrc}
                                             </div>
 
-                                            {/* Прямой запуск резки в один клик */}
+                                            {/* Действия с выбранным файлом */}
+                                            <Space style={{ width: '100%', marginBottom: '12px' }} direction="vertical">
+                                                <Button
+                                                    block
+                                                    icon={<EditOutlined />}
+                                                    onClick={() => {
+                                                        setRenameTarget({ type: 'file', id: selectedFile.id, name: selectedFile.name });
+                                                        renameForm.setFieldsValue({ newName: selectedFile.name });
+                                                    }}
+                                                >
+                                                    Переименовать файл
+                                                </Button>
+
+                                                <Popconfirm
+                                                    title="Удалить этот файл с сервера?"
+                                                    onConfirm={() => handleDeleteFile(selectedFile.id)}
+                                                    okText="Да"
+                                                    cancelText="Нет"
+                                                >
+                                                    <Button block danger icon={<DeleteOutlined />}>
+                                                        Удалить файл
+                                                    </Button>
+                                                </Popconfirm>
+                                            </Space>
+
                                             <Button
                                                 type="primary"
                                                 danger
@@ -426,6 +501,27 @@ export default function FolderManager() {
                             rules={[{ required: true, message: 'Введите название папки' }]}
                         >
                             <Input placeholder="Новая папка" autoFocus disabled={isCreating} />
+                        </Form.Item>
+                    </Form>
+                </Modal>
+
+                {/* ЕДИНАЯ МОДАЛКА ДЛЯ ПЕРЕИМЕНОВАНИЯ */}
+                <Modal
+                    title={renameTarget?.type === 'folder' ? 'Переименовать папку' : 'Переименовать файл'}
+                    open={!!renameTarget}
+                    onOk={() => renameForm.submit()}
+                    onCancel={() => { setRenameTarget(null); renameForm.resetFields(); }}
+                    okText="Сохранить"
+                    cancelText="Отмена"
+                    destroyOnClose
+                >
+                    <Form form={renameForm} layout="vertical" onFinish={handleRename} style={{ marginTop: '16px' }}>
+                        <Form.Item
+                            name="newName"
+                            label="Новое название"
+                            rules={[{ required: true, message: 'Поле не может быть пустым' }]}
+                        >
+                            <Input autoFocus />
                         </Form.Item>
                     </Form>
                 </Modal>
