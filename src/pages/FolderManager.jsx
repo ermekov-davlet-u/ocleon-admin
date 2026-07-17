@@ -212,23 +212,54 @@ export default function FolderManager() {
     const handleJustCut = async () => {
         if (!selectedFile) return;
         setIsCuttingLoading(true);
+
         try {
+            // 1. Регистрируем заказ в CRM
             await createOrder({ fileId: selectedFile.id }).unwrap();
             message.success('Заказ (черновик) зарегистрирован в CRM');
 
             const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'));
-            const pltFileName = `${baseName}.plt`;
             const host = 'https://ocleon.333.kg/disk';
             const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
-            const pltFileUrl = `${host}${folderPath}/${pltFileName}`;
 
-            const response = await fetch(pltFileUrl);
-            if (!response.ok) throw new Error(`Не удалось получить файл .plt. Статус: ${response.status}`);
-            const fileBlob = await response.blob();
+            let fileBlob = null;
+            let finalFileName = '';
 
+            // Массив расширений для проверки в порядке приоритета 
+            const extensions = ['eps', 'cdr'];
+
+            // 2. Перебираем расширения, пока не найдем рабочий файл
+            for (const ext of extensions) {
+                const currentFileName = `${baseName}.${ext}`;
+                const currentFileUrl = `${host}${folderPath}/${currentFileName}`;
+
+                console.log(`Проверяем наличие файла: ${currentFileName}...`); // <--- Лог проверки
+
+                try {
+                    const response = await fetch(currentFileUrl);
+                    if (response.ok) {
+                        fileBlob = await response.blob();
+                        finalFileName = currentFileName;
+                        console.log(`-> Отлично, файл ${currentFileName} найден на сервере!`); // <--- Лог успеха
+                        break;
+                    } else {
+                        console.log(`-> Файла ${currentFileName} нет на сервере (Статус: ${response.status})`);
+                    }
+                } catch (fetchError) {
+                    console.warn(`-> Ошибка сети при запросе ${currentFileName}`);
+                }
+            }
+
+            // Если после цикла ничего не скачалось
+            if (!fileBlob) {
+                throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
+            }
+
+            // 3. Формируем FormData со спасенным файлом
             const formdata = new FormData();
-            formdata.append("file", fileBlob, pltFileName);
+            formdata.append("file", fileBlob, finalFileName);
 
+            // 4. Отправляем на локальный станок
             const localResponse = await fetch("http://localhost:5000/cut", {
                 method: "POST",
                 body: formdata,
@@ -236,7 +267,8 @@ export default function FolderManager() {
             });
 
             if (!localResponse.ok) throw new Error('Локальный станок отклонил файл резки');
-            message.success(`Задание "${pltFileName}" успешно отправлено на станок!`);
+            message.success(`Задание "${finalFileName}" успешно отправлено на станок!`);
+
         } catch (error) {
             console.error(error);
             message.error(error?.data?.message || error.message || 'Ошибка при мгновенном запуске резки');

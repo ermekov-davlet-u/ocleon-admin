@@ -1,16 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Tag, Space, message, Modal, Grid, Card, Form, Input, InputNumber, Switch, Divider } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import React, { useState, useMemo } from 'react';
+import {
+  Table, Button, Tag, Space, message, Modal, Grid, Card, Form, Input, InputNumber,
+  Switch, Divider, Select, DatePicker, Row, Col, Empty, Tooltip,
+} from 'antd';
+import { EditOutlined, SafetyCertificateOutlined, ScissorOutlined, SearchOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import {
   useGetOrdersQuery,
   useDeleteOrderMutation,
   useChangeOrderStatusMutation,
   useCreateOrderMutation,
-  useUpdateOrderMutation, // <-- Убедитесь, что мутация добавлена в orderApi
+  useUpdateOrderMutation,
+  useUseWarrantyMutation,
 } from '../store/api/orderApi';
 import { useGetDeviceTypesQuery } from '../store/api/cuttingApi';
+import { useGetMaterialsQuery } from '../store/api/materialsApi';
 
 const { useBreakpoint } = Grid;
+const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 export const CuttingOrderStatus = {
   NEW: 'NEW',
@@ -36,6 +44,31 @@ const statusLabels = {
   DEFECT: 'Брак',
 };
 
+// Заказ считается доступным для гарантийной переоклейки, если:
+// - сам он НЕ является гарантийной оклейкой (у гарантийных оклеек своей гарантии нет)
+// - гарантия по нему ещё не использована
+// - прошло не больше 365 дней с момента создания
+// - он не в статусе "Брак"
+function canUseWarranty(record) {
+  if (!record?.createdAt) return false;
+  if (record.isWarrantyOrder) return false;
+  if (record.warrantyUsed) return false;
+  if (record.status === CuttingOrderStatus.DEFECT) return false;
+  const daysSince = Math.floor((Date.now() - new Date(record.createdAt)) / 86400000);
+  return daysSince <= 365;
+}
+
+// TODO: подставьте реальное поле с URL файла чертежа, если оно отличается.
+// Здесь я предполагаю, что cuttingJob.file либо уже содержит готовый url,
+// либо просто имя файла, которое лежит в корне диска.
+function getCuttingFileUrl(record) {
+  const file = record?.file || record?.cuttingJob?.file;
+  if (!file) return null;
+  if (file.url) return file.url;
+  if (file.name) return `https://ocleon.333.kg/${record?.file?.folder.path}/${file.name}`;
+  return null;
+}
+
 const CuttingOrdersTable = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -44,13 +77,67 @@ const CuttingOrdersTable = () => {
   const [deleteOrder] = useDeleteOrderMutation();
   const [changeStatus] = useChangeOrderStatusMutation();
   const { data: deviceTypes = [] } = useGetDeviceTypesQuery();
+  const { data: materials = [] } = useGetMaterialsQuery();
   const [createOrder] = useCreateOrderMutation();
-  const [updateOrder] = useUpdateOrderMutation(); // <-- Подключаем обновление
+  const [updateOrder] = useUpdateOrderMutation();
+  const [warrantys, { isLoading: isWarrantyLoading }] = useUseWarrantyMutation();
+
+  // ── Фильтры ──────────────────────────────────────────────────────────────
+  const [searchText, setSearchText] = useState('');
+  const [dateRange, setDateRange] = useState(null);
+  const [statusFilter, setStatusFilter] = useState([]);
+  const [warrantyFilter, setWarrantyFilter] = useState('all'); // all | warrantyOrders | available | used
+  const [deviceFilter, setDeviceFilter] = useState(null);
 
   // Состояния для модалки редактирования
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [form] = Form.useForm();
+
+  // Состояния для модалки гарантийной оклейки
+  const [warrantyRecord, setWarrantyRecord] = useState(null);
+  const [isWarrantyModalOpen, setIsWarrantyModalOpen] = useState(false);
+
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    const q = searchText.trim().toLowerCase();
+
+    return orders.filter((o) => {
+      // Поиск по клиенту / номеру заказа
+      if (q) {
+        const matchesSearch =
+          o.client?.phone?.toLowerCase().includes(q) ||
+          o.client?.name?.toLowerCase().includes(q) ||
+          String(o.id).includes(q);
+        if (!matchesSearch) return false;
+      }
+
+      // Диапазон дат
+      if (dateRange && dateRange[0] && dateRange[1] && o.createdAt) {
+        const created = dayjs(o.createdAt);
+        if (created.isBefore(dateRange[0], 'day') || created.isAfter(dateRange[1], 'day')) {
+          return false;
+        }
+      }
+
+      // Статус
+      if (statusFilter.length > 0 && !statusFilter.includes(o.status)) {
+        return false;
+      }
+
+      // Устройство
+      if (deviceFilter && o.cuttingJob?.deviceType?.id !== deviceFilter) {
+        return false;
+      }
+
+      // Гарантия
+      if (warrantyFilter === 'warrantyOrders' && !o.isWarrantyOrder) return false;
+      if (warrantyFilter === 'available' && !canUseWarranty(o)) return false;
+      if (warrantyFilter === 'used' && (o.isWarrantyOrder || !o.warrantyUsed)) return false;
+
+      return true;
+    });
+  }, [orders, searchText, dateRange, statusFilter, deviceFilter, warrantyFilter]);
 
   const handleDelete = (id) => {
     Modal.confirm({
@@ -90,7 +177,8 @@ const CuttingOrdersTable = () => {
       clientEmail: record.client?.email || '',
       quantity: record.quantity || 1,
       isWarrantyOrder: record.isWarrantyOrder || false,
-      fileId: record.file?.id || null,
+      totalAmount: record.totalAmount,
+      materialId: record.cuttingJob?.material?.id,
     });
     setIsEditModalOpen(true);
   };
@@ -108,6 +196,9 @@ const CuttingOrdersTable = () => {
         quantity: values.quantity,
         isWarrantyOrder: values.isWarrantyOrder,
         totalAmount: values.totalAmount ?? 0,
+        // TODO: подтвердите, что бэкенд ожидает именно materialId в PATCH заказа
+        // (если материал хранится на cuttingJob, возможно эндпоинт другой)
+        materialId: values.materialId,
       };
 
       await updateOrder({ id: editingRecord.id, ...dto }).unwrap();
@@ -118,6 +209,26 @@ const CuttingOrdersTable = () => {
     } catch (err) {
       console.error(err);
       message.error('Ошибка при сохранении изменений');
+    }
+  };
+
+  // Открытие модалки гарантийной оклейки
+  const handleOpenWarrantyModal = (record) => {
+    setWarrantyRecord(record);
+    setIsWarrantyModalOpen(true);
+  };
+
+  // Подтверждение гарантийной оклейки — создаёт новую (гарантийную) накладную
+  const handleConfirmWarranty = async () => {
+    if (!warrantyRecord) return;
+    try {
+      await warrantys(warrantyRecord.id).unwrap();
+      message.success('Гарантийная оклейка создана');
+      setIsWarrantyModalOpen(false);
+      setWarrantyRecord(null);
+      refetch();
+    } catch (err) {
+      message.error(err?.data?.message || 'Ошибка применения гарантии');
     }
   };
 
@@ -150,7 +261,18 @@ const CuttingOrdersTable = () => {
           </Button>
         )}
 
-        {/* Кнопка Редактировать */}
+        {canUseWarranty(record) && (
+          <Button
+            block={isMobile}
+            size="small"
+            style={{ background: '#6c5ce7', color: '#fff', border: 'none' }}
+            icon={<SafetyCertificateOutlined />}
+            onClick={() => handleOpenWarrantyModal(record)}
+          >
+            Гарантийная оклейка
+          </Button>
+        )}
+
         <Button
           block={isMobile}
           size="small"
@@ -191,8 +313,8 @@ const CuttingOrdersTable = () => {
             <div><b>Телефон:</b> {record.client?.phone || '-'}</div>
             <div><b>Клиент:</b> {record.client?.name || '-'}</div>
             <div><b>Материал:</b> {record.cuttingJob?.material?.name || '-'}</div>
-            <div><b>Тип брони:</b> {record.cuttingJob?.armorType?.name || '-'}</div>
-            <div><b>Устройство:</b> {record.cuttingJob?.deviceType?.name || '-'}</div>
+            <div><b>Тип брони:</b> {record?.file?.folder?.name || '-'}</div>
+            <div><b>Устройство:</b> {record?.file?.name || '-'}</div>
             {record.file && <div><b>ID Файла:</b> #{record.file.id}</div>}
             <div><b>Кол-во:</b> {record.quantity ?? '-'}</div>
             <div><b>Сумма:</b> {record.totalAmount ?? '-'}</div>
@@ -226,12 +348,12 @@ const CuttingOrdersTable = () => {
     {
       title: 'Тип брони',
       key: 'armorType',
-      render: (_, record) => record.cuttingJob?.armorType?.name || '-',
+      render: (_, record) => record?.file?.folder?.name || '-',
     },
     {
       title: 'Устройство',
       key: 'deviceType',
-      render: (_, record) => record.cuttingJob?.deviceType?.name || '-',
+      render: (_, record) => record?.file?.name || '-',
     },
     { title: 'Кол-во', dataIndex: 'quantity', key: 'quantity', width: 80 },
     {
@@ -249,19 +371,85 @@ const CuttingOrdersTable = () => {
     { title: 'Сумма', dataIndex: 'totalAmount', key: 'totalAmount', width: 90 },
     { title: 'Итого', dataIndex: 'finalAmount', key: 'finalAmount', width: 90 },
     { title: 'Дата создания', dataIndex: 'createdAt', key: 'createdAt', render: formatDate, width: 140 },
-    { title: 'Действия', key: 'actions', render: (_, record) => renderActions(record), width: 260, fixed: 'right' },
+    { title: 'Действия', key: 'actions', render: (_, record) => renderActions(record), width: 320, fixed: 'right' },
   ];
+
+  const warrantyFileUrl = getCuttingFileUrl(warrantyRecord);
 
   return (
     <>
+      {/* ФИЛЬТРЫ */}
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} md={6}>
+          <Input
+            allowClear
+            placeholder="Поиск: телефон, имя, № заказа"
+            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+        </Col>
+
+        <Col xs={24} sm={12} md={6}>
+          <RangePicker
+            style={{ width: '100%' }}
+            value={dateRange}
+            onChange={(v) => setDateRange(v)}
+            placeholder={['Дата от', 'Дата до']}
+          />
+        </Col>
+
+        <Col xs={24} sm={12} md={5}>
+          <Select
+            mode="multiple"
+            allowClear
+            style={{ width: '100%' }}
+            placeholder="Статус"
+            value={statusFilter}
+            onChange={setStatusFilter}
+          >
+            {Object.keys(statusLabels).map((key) => (
+              <Option key={key} value={key}>{statusLabels[key]}</Option>
+            ))}
+          </Select>
+        </Col>
+
+        <Col xs={24} sm={12} md={4}>
+          <Select
+            allowClear
+            style={{ width: '100%' }}
+            placeholder="Устройство"
+            value={deviceFilter}
+            onChange={setDeviceFilter}
+          >
+            {deviceTypes.map((d) => (
+              <Option key={d.id} value={d.id}>{d.name}</Option>
+            ))}
+          </Select>
+        </Col>
+
+        <Col xs={24} sm={12} md={3}>
+          <Select
+            style={{ width: '100%' }}
+            value={warrantyFilter}
+            onChange={setWarrantyFilter}
+          >
+            <Option value="all">Все заказы</Option>
+            <Option value="available">Доступна гарантия</Option>
+            <Option value="used">Гарантия использована</Option>
+            <Option value="warrantyOrders">Гарантийные оклейки</Option>
+          </Select>
+        </Col>
+      </Row>
+
       <Table
         rowKey="id"
         loading={isLoading}
-        dataSource={orders || []}
+        dataSource={filteredOrders}
         columns={isMobile ? mobileColumns : desktopColumns}
-        scroll={isMobile ? undefined : { x: 1300 }}
+        scroll={isMobile ? undefined : { x: 1400 }}
         size={isMobile ? 'middle' : 'small'}
-        pagination={{ pageSize: isMobile ? 5 : 10 }}
+        pagination={{ pageSize: isMobile ? 5 : 10, showTotal: (t) => `Всего: ${t}` }}
       />
 
       {/* Модальное окно редактирования */}
@@ -307,6 +495,19 @@ const CuttingOrdersTable = () => {
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
 
+          <Form.Item name="materialId" label="Материал">
+            <Select
+              showSearch
+              allowClear
+              placeholder="Выберите материал"
+              optionFilterProp="children"
+            >
+              {materials.map((m) => (
+                <Option key={m.id} value={m.id}>{m.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
           <Form.Item name="totalAmount" label="Сумма">
             <Input type={"number"} placeholder="Сумма" />
           </Form.Item>
@@ -320,6 +521,76 @@ const CuttingOrdersTable = () => {
           </Form.Item>
 
         </Form>
+      </Modal>
+
+      {/* Модальное окно подтверждения гарантийной оклейки */}
+      <Modal
+        title={
+          <Space>
+            <SafetyCertificateOutlined style={{ color: '#6c5ce7' }} />
+            <span>Гарантийная оклейка — заказ #{warrantyRecord?.id}</span>
+          </Space>
+        }
+        open={isWarrantyModalOpen}
+        onCancel={() => {
+          setIsWarrantyModalOpen(false);
+          setWarrantyRecord(null);
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setIsWarrantyModalOpen(false);
+              setWarrantyRecord(null);
+            }}
+          >
+            Отмена
+          </Button>,
+          <Button
+            key="cut"
+            type="primary"
+            danger
+            icon={<ScissorOutlined />}
+            loading={isWarrantyLoading}
+            onClick={handleConfirmWarranty}
+          >
+            Начать резку и создать накладную
+          </Button>,
+        ]}
+        destroyOnClose
+      >
+        {warrantyRecord && (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <div style={{
+              width: '100%', height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', overflow: 'hidden',
+            }}>
+              {warrantyFileUrl ? (
+                <img
+                  src={warrantyFileUrl}
+                  alt="Чертёж"
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <Empty description="Файл чертежа недоступен" />
+              )}
+            </div>
+
+            <Space wrap>
+              <Tag color="purple">📱 {warrantyRecord.cuttingJob?.deviceType?.name || '-'}</Tag>
+              <Tag color="green">🛡 {warrantyRecord.cuttingJob?.material?.name || '-'}</Tag>
+              <Tag color="gold">✂️ {warrantyRecord.cuttingJob?.armorType?.name || '-'}</Tag>
+            </Space>
+
+            <div>Клиент: <b>{warrantyRecord.client?.phone}</b> {warrantyRecord.client?.name ? `(${warrantyRecord.client.name})` : ''}</div>
+            <div>Количество: <b>{warrantyRecord.quantity ?? 1}</b></div>
+
+            <Tooltip title="Нажимая «Начать резку», вы создаёте новую гарантийную накладную по этому же файлу, а исходный заказ помечается как использовавший гарантию.">
+              <span style={{ fontSize: 12, color: '#999' }}>ⓘ Что произойдёт при подтверждении</span>
+            </Tooltip>
+          </Space>
+        )}
       </Modal>
     </>
   );
