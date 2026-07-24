@@ -224,8 +224,8 @@ export default function FolderManager() {
 
             let fileBlob = null;
             let finalFileName = '';
+            let foundExt = '';
 
-            // Массив расширений для проверки в порядке приоритета 
             const extensions = ['eps', 'cdr'];
 
             // 2. Перебираем расширения, пока не найдем рабочий файл
@@ -233,14 +233,15 @@ export default function FolderManager() {
                 const currentFileName = `${baseName}.${ext}`;
                 const currentFileUrl = `${host}${folderPath}/${currentFileName}`;
 
-                console.log(`Проверяем наличие файла: ${currentFileName}...`); // <--- Лог проверки
+                console.log(`Проверяем наличие файла: ${currentFileName}...`);
 
                 try {
                     const response = await fetch(currentFileUrl);
                     if (response.ok) {
                         fileBlob = await response.blob();
                         finalFileName = currentFileName;
-                        console.log(`-> Отлично, файл ${currentFileName} найден на сервере!`); // <--- Лог успеха
+                        foundExt = ext;
+                        console.log(`-> Отлично, файл ${currentFileName} найден на сервере!`);
                         break;
                     } else {
                         console.log(`-> Файла ${currentFileName} нет на сервере (Статус: ${response.status})`);
@@ -250,12 +251,38 @@ export default function FolderManager() {
                 }
             }
 
-            // Если после цикла ничего не скачалось
             if (!fileBlob) {
                 throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
             }
 
-            // 3. Формируем FormData со спасенным файлом
+            // 2.5. Если нашли именно .eps — сначала конвертируем его на сервере
+            if (foundExt === 'eps') {
+                console.log(`Файл ${finalFileName} — это .eps, отправляем на конвертацию...`);
+
+                const convertFormData = new FormData();
+                convertFormData.append('file', fileBlob, finalFileName);
+
+                const convertResponse = await fetch('https://ocleon.333.kg/folder/convert', {
+                    method: 'POST',
+                    body: convertFormData,
+                    redirect: 'follow'
+                });
+
+                if (!convertResponse.ok) {
+                    throw new Error('Не удалось сконвертировать .eps файл на сервере');
+                }
+
+                // ВАЖНО: подстройте под реальный формат ответа /folder/convert.
+                // Если сервер отдаёт бинарный файл — .blob() подойдёт.
+                // Если отдаёт JSON с ссылкой на файл — нужно поменять на .json() и затем fetch по ссылке.
+                fileBlob = await convertResponse.blob();
+                finalFileName = finalFileName.replace(/\.eps$/i, '.plt'); // поменяйте расширение на то, что реально возвращает конвертер
+
+                console.log(`-> Конвертация выполнена, итоговый файл: ${finalFileName}`);
+                message.success('Файл .eps успешно сконвертирован');
+            }
+
+            // 3. Формируем FormData с итоговым (возможно, сконвертированным) файлом
             const formdata = new FormData();
             formdata.append("file", fileBlob, finalFileName);
 
