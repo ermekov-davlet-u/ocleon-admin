@@ -65,8 +65,118 @@ function getCuttingFileUrl(record) {
   const file = record?.file || record?.cuttingJob?.file;
   if (!file) return null;
   if (file.url) return file.url;
-  if (file.name) return `https://ocleon.333.kg/${record?.file?.folder.path}/${file.name}`;
+  if (file.name) return `https://ocleon.333.kg/${record?.file?.path}`;
   return null;
+}
+
+// Разбирает record.file.path (полный относительный путь вида "folder/sub/name.eps")
+// на директорию и базовое имя файла без расширения.
+function parseCuttingFilePath(filePath) {
+  const lastSlash = filePath.lastIndexOf('/');
+  const dirPath = lastSlash >= 0 ? filePath.substring(0, lastSlash) : '';
+  const fileNameWithExt = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+  const dotIndex = fileNameWithExt.lastIndexOf('.');
+  const baseName = dotIndex >= 0 ? fileNameWithExt.substring(0, dotIndex) : fileNameWithExt;
+  return { dirPrefix: dirPath ? `/${dirPath}` : '', baseName };
+}
+
+// Ищет на диске файл .eps/.cdr по базовому имени, конвертирует его в цепочке
+// cdr -> eps -> plt (при необходимости) и отправляет итоговый .plt на локальный станок.
+async function runCuttingJob(filePath) {
+  if (!filePath) {
+    throw new Error('Не найден путь к файлу чертежа для резки');
+  }
+
+  const host = 'https://ocleon.333.kg';
+  const { dirPrefix, baseName } = parseCuttingFilePath(filePath);
+
+  let fileBlob = null;
+  let finalFileName = '';
+  let foundExt = '';
+
+  const extensions = ['eps', 'cdr'];
+
+  // 1. Перебираем расширения, пока не найдем рабочий файл
+  for (const ext of extensions) {
+    const currentFileName = `${baseName}.${ext}`;
+    const currentFileUrl = `${host}${dirPrefix}/${currentFileName}`;
+
+    try {
+      const response = await fetch(currentFileUrl);
+      if (response.ok) {
+        fileBlob = await response.blob();
+        finalFileName = currentFileName;
+        foundExt = ext;
+        break;
+      }
+    } catch (fetchError) {
+      console.warn(`Ошибка сети при запросе ${currentFileName}`);
+    }
+  }
+
+  if (!fileBlob) {
+    throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
+  }
+
+  // 1.1. Если нашли .cdr — сначала конвертируем его в .eps,
+  // после чего файл "падает" в общий блок конвертации .eps -> .plt ниже
+  // (итоговая цепочка: cdr -> eps -> plt -> резка).
+  if (foundExt === 'cdr') {
+    const cdrFormData = new FormData();
+    cdrFormData.append('file', fileBlob, finalFileName);
+
+    const cdrResponse = await fetch(`${host}/folder/cdr-to-eps`, {
+      method: 'POST',
+      body: cdrFormData,
+      redirect: 'follow'
+    });
+
+    if (!cdrResponse.ok) {
+      throw new Error('Не удалось сконвертировать .cdr файл в .eps на сервере');
+    }
+
+    // ВАЖНО: подстройте под реальный формат ответа /folder/cdr-to-eps,
+    // если сервер отдаёт не бинарный файл, а JSON/текст со ссылкой.
+    fileBlob = await cdrResponse.blob();
+    finalFileName = finalFileName.replace(/\.cdr$/i, '.eps');
+    foundExt = 'eps';
+  }
+
+  // 1.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
+  if (foundExt === 'eps') {
+    const convertFormData = new FormData();
+    convertFormData.append('file', fileBlob, finalFileName);
+
+    const convertResponse = await fetch(`${host}/folder/convert`, {
+      method: 'POST',
+      body: convertFormData,
+      redirect: 'follow'
+    });
+
+    if (!convertResponse.ok) {
+      throw new Error('Не удалось сконвертировать .eps файл на сервере');
+    }
+
+    // ВАЖНО: подстройте под реальный формат ответа /folder/convert,
+    // если сервер отдаёт не бинарный файл, а JSON со ссылкой.
+    fileBlob = await convertResponse.blob();
+    finalFileName = finalFileName.replace(/\.eps$/i, '.plt');
+    foundExt = 'plt';
+  }
+
+  // 2. Отправляем итоговый .plt на локальный станок
+  const formdata = new FormData();
+  formdata.append('file', fileBlob, finalFileName);
+
+  const localResponse = await fetch('http://localhost:5000/cut', {
+    method: 'POST',
+    body: formdata,
+    redirect: 'follow'
+  });
+
+  if (!localResponse.ok) throw new Error('Локальный станок отклонил файл резки');
+
+  return finalFileName;
 }
 
 const CuttingOrdersTable = () => {
@@ -97,6 +207,7 @@ const CuttingOrdersTable = () => {
   // Состояния для модалки гарантийной оклейки
   const [warrantyRecord, setWarrantyRecord] = useState(null);
   const [isWarrantyModalOpen, setIsWarrantyModalOpen] = useState(false);
+  const [isWarrantyCuttingLoading, setIsWarrantyCuttingLoading] = useState(false);
 
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
@@ -218,17 +329,39 @@ const CuttingOrdersTable = () => {
     setIsWarrantyModalOpen(true);
   };
 
-  // Подтверждение гарантийной оклейки — создаёт новую (гарантийную) накладную
+  // Подтверждение гарантийной оклейки:
+  // 1) создаёт новую (гарантийную) накладную в CRM
+  // 2) затем отправляет файл чертежа на резку (cdr -> eps -> plt -> localhost:5000/cut)
+  // Если шаг резки не удался — накладная в CRM всё равно остаётся созданной,
+  // пользователю просто показывается ошибка.
   const handleConfirmWarranty = async () => {
     if (!warrantyRecord) return;
+
     try {
       await warrantys(warrantyRecord.id).unwrap();
       message.success('Гарантийная оклейка создана');
-      setIsWarrantyModalOpen(false);
-      setWarrantyRecord(null);
-      refetch();
     } catch (err) {
       message.error(err?.data?.message || 'Ошибка применения гарантии');
+      return;
+    }
+
+    setIsWarrantyCuttingLoading(true);
+    try {
+      const filePath = warrantyRecord?.file?.path;
+      const finalFileName = await runCuttingJob(filePath);
+      message.success(`Задание "${finalFileName}" успешно отправлено на станок!`);
+      setIsWarrantyModalOpen(false);
+      setWarrantyRecord(null);
+    } catch (error) {
+      console.error(error);
+      message.error(
+        error?.message || 'Гарантийная накладная создана, но отправить файл на резку не удалось'
+      );
+      // Модалку не закрываем — накладная уже создана, пользователь может
+      // разобраться с файлом и не потерять контекст заказа.
+    } finally {
+      setIsWarrantyCuttingLoading(false);
+      refetch();
     }
   };
 
@@ -551,7 +684,7 @@ const CuttingOrdersTable = () => {
             type="primary"
             danger
             icon={<ScissorOutlined />}
-            loading={isWarrantyLoading}
+            loading={isWarrantyLoading || isWarrantyCuttingLoading}
             onClick={handleConfirmWarranty}
           >
             Начать резку и создать накладную
@@ -586,7 +719,7 @@ const CuttingOrdersTable = () => {
             <div>Клиент: <b>{warrantyRecord.client?.phone}</b> {warrantyRecord.client?.name ? `(${warrantyRecord.client.name})` : ''}</div>
             <div>Количество: <b>{warrantyRecord.quantity ?? 1}</b></div>
 
-            <Tooltip title="Нажимая «Начать резку», вы создаёте новую гарантийную накладную по этому же файлу, а исходный заказ помечается как использовавший гарантию.">
+            <Tooltip title="Нажимая «Начать резку», вы создаёте новую гарантийную накладную по этому же файлу, а исходный заказ помечается как использовавший гарантию. Затем файл автоматически отправляется на станок.">
               <span style={{ fontSize: 12, color: '#999' }}>ⓘ Что произойдёт при подтверждении</span>
             </Tooltip>
           </Space>

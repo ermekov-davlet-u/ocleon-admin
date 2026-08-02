@@ -255,9 +255,40 @@ export default function FolderManager() {
                 throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
             }
 
-            // 2.5. Если нашли именно .eps — сначала конвертируем его на сервере
+            // 2.1. Если нашли .cdr — сначала конвертируем его в .eps.
+            // После этого шага файл "падает" в общий блок конвертации .eps -> .plt ниже,
+            // то есть итоговая цепочка для .cdr выглядит так: cdr -> eps -> plt -> резка.
+            if (foundExt === 'cdr') {
+                console.log(`Файл ${finalFileName} — это .cdr, отправляем на конвертацию в .eps...`);
+
+                const cdrFormData = new FormData();
+                cdrFormData.append('file', fileBlob, finalFileName);
+
+                const cdrResponse = await fetch('https://ocleon.333.kg/folder/cdr-to-eps', {
+                    method: 'POST',
+                    body: cdrFormData,
+                    redirect: 'follow'
+                });
+
+                if (!cdrResponse.ok) {
+                    throw new Error('Не удалось сконвертировать .cdr файл в .eps на сервере');
+                }
+
+                // ВАЖНО: подстройте под реальный формат ответа /folder/cdr-to-eps.
+                // Если сервер отдаёт бинарный .eps файл — .blob() подойдёт (как ниже).
+                // Если отдаёт JSON/текст со ссылкой на файл — замените на .text()/.json()
+                // и затем сделайте fetch по полученной ссылке, чтобы получить сам .eps как blob.
+                fileBlob = await cdrResponse.blob();
+                finalFileName = finalFileName.replace(/\.cdr$/i, '.eps');
+                foundExt = 'eps';
+
+                console.log(`-> .cdr успешно сконвертирован в .eps: ${finalFileName}`);
+                message.success('Файл .cdr успешно сконвертирован в .eps');
+            }
+
+            // 2.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
             if (foundExt === 'eps') {
-                console.log(`Файл ${finalFileName} — это .eps, отправляем на конвертацию...`);
+                console.log(`Файл ${finalFileName} — это .eps, отправляем на конвертацию в .plt...`);
 
                 const convertFormData = new FormData();
                 convertFormData.append('file', fileBlob, finalFileName);
@@ -276,13 +307,14 @@ export default function FolderManager() {
                 // Если сервер отдаёт бинарный файл — .blob() подойдёт.
                 // Если отдаёт JSON с ссылкой на файл — нужно поменять на .json() и затем fetch по ссылке.
                 fileBlob = await convertResponse.blob();
-                finalFileName = finalFileName.replace(/\.eps$/i, '.plt'); // поменяйте расширение на то, что реально возвращает конвертер
+                finalFileName = finalFileName.replace(/\.eps$/i, '.plt');
+                foundExt = 'plt';
 
                 console.log(`-> Конвертация выполнена, итоговый файл: ${finalFileName}`);
-                message.success('Файл .eps успешно сконвертирован');
+                message.success('Файл .eps успешно сконвертирован в .plt');
             }
 
-            // 3. Формируем FormData с итоговым (возможно, сконвертированным) файлом
+            // 3. Формируем FormData с итоговым .plt файлом
             const formdata = new FormData();
             formdata.append("file", fileBlob, finalFileName);
 
