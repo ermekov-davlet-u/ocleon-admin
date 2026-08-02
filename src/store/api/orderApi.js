@@ -6,8 +6,11 @@ export const orderApi = createApi({
   baseQuery: baseQueryWithReauth, // с авторизацией и 401-редиректом
   tagTypes: ['CuttingOrder'],
   endpoints: (builder) => ({
+    // Теперь принимает { page, limit } и возвращает { data, total, page, limit, hasMore }.
+    // По умолчанию грузим по 100 записей за раз.
     getOrders: builder.query({
-      query: () => 'cutting-orders',
+      query: ({ page = 1, limit = 100 } = {}) =>
+        `cutting-orders?page=${page}&limit=${limit}`,
       providesTags: ['CuttingOrder'],
     }),
     createOrder: builder.mutation({
@@ -73,6 +76,7 @@ export const orderApi = createApi({
 
 export const {
   useGetOrdersQuery,
+  useLazyGetOrdersQuery,
   useCreateOrderMutation,
   useUpdateOrderMutation,
   useGetClientHistoryQuery,

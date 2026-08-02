@@ -214,10 +214,6 @@ export default function FolderManager() {
         setIsCuttingLoading(true);
 
         try {
-            // 1. Регистрируем заказ в CRM
-            await createOrder({ fileId: selectedFile.id }).unwrap();
-            message.success('Заказ (черновик) зарегистрирован в CRM');
-
             const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'));
             const host = 'https://ocleon.333.kg/disk';
             const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
@@ -228,7 +224,7 @@ export default function FolderManager() {
 
             const extensions = ['eps', 'cdr'];
 
-            // 2. Перебираем расширения, пока не найдем рабочий файл
+            // 1. Перебираем расширения, пока не найдем рабочий файл
             for (const ext of extensions) {
                 const currentFileName = `${baseName}.${ext}`;
                 const currentFileUrl = `${host}${folderPath}/${currentFileName}`;
@@ -255,7 +251,7 @@ export default function FolderManager() {
                 throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
             }
 
-            // 2.1. Если нашли .cdr — сначала конвертируем его в .eps.
+            // 1.1. Если нашли .cdr — сначала конвертируем его в .eps.
             // После этого шага файл "падает" в общий блок конвертации .eps -> .plt ниже,
             // то есть итоговая цепочка для .cdr выглядит так: cdr -> eps -> plt -> резка.
             if (foundExt === 'cdr') {
@@ -286,7 +282,7 @@ export default function FolderManager() {
                 message.success('Файл .cdr успешно сконвертирован в .eps');
             }
 
-            // 2.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
+            // 1.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
             if (foundExt === 'eps') {
                 console.log(`Файл ${finalFileName} — это .eps, отправляем на конвертацию в .plt...`);
 
@@ -314,11 +310,11 @@ export default function FolderManager() {
                 message.success('Файл .eps успешно сконвертирован в .plt');
             }
 
-            // 3. Формируем FormData с итоговым .plt файлом
+            // 2. Формируем FormData с итоговым .plt файлом
             const formdata = new FormData();
             formdata.append("file", fileBlob, finalFileName);
 
-            // 4. Отправляем на локальный станок
+            // 3. Отправляем на локальный станок
             const localResponse = await fetch("http://localhost:5000/cut", {
                 method: "POST",
                 body: formdata,
@@ -326,7 +322,23 @@ export default function FolderManager() {
             });
 
             if (!localResponse.ok) throw new Error('Локальный станок отклонил файл резки');
+
             message.success(`Задание "${finalFileName}" успешно отправлено на станок!`);
+
+            // 4. Только после того, как станок реально принял файл — регистрируем накладную в CRM.
+            // Если резка не удалась (файл не найден / ошибка конвертации / станок отклонил),
+            // накладная не создаётся — до этого места код просто не дойдёт.
+            try {
+                await createOrder({ fileId: selectedFile.id }).unwrap();
+                message.success('Накладная зарегистрирована в CRM');
+            } catch (orderError) {
+                console.error(orderError);
+                message.error(
+                    orderError?.data?.message || 'Резка отправлена на станок, но не удалось создать накладную в CRM'
+                );
+                // Резку не отменяем — файл уже ушёл на станок, просто предупреждаем,
+                // что накладную нужно будет создать вручную.
+            }
 
         } catch (error) {
             console.error(error);
