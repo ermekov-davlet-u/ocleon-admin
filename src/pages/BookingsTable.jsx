@@ -80,7 +80,10 @@ const BookingsTable = () => {
         isLoading,
         isFetching,
         refetch,
-    } = useGetBookingsQuery(queryParams);
+    } = useGetBookingsQuery(queryParams, {
+    refetchOnMountOrArgChange: true,
+    pollingInterval: 120000, // 2 минуты (в миллисекундах)
+  });
 
     const [updateBooking, { isLoading: isUpdating }] = useUpdateBookingMutation();
     const [deleteBooking, { isLoading: isDeleting }] = useDeleteBookingMutation();
