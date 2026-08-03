@@ -204,9 +204,9 @@ export default function FolderManager() {
 
     const selectedFileSrc = useMemo(() => {
         if (!selectedFile) return '';
-        const host = 'https://ocleon.333.kg/disk';
-        const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
-        return `${host}${folderPath}/${selectedFile.name}`;
+        const host = 'https://ocleon.333.kg';
+        const folderPath = selectedFile.path ? `/${selectedFile.path}` : '';
+        return `${host}${folderPath}`;
     }, [selectedFile]);
 
     const handleJustCut = async () => {

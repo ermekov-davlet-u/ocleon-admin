@@ -49,10 +49,10 @@ export const orderApi = createApi({
       invalidatesTags: ['CuttingOrder'],
     }),
     changeOrderStatus: builder.mutation({
-      query: ({ id, status }) => ({
+      query: ({ id, status, comment }) => ({
         url: `cutting-orders/status-change/${id}`,
         method: 'PATCH',
-        body: { status }, // передаем объект { status: "новый статус" }
+        body: { status, comment }, // передаем объект { status: "новый статус", comment: "комментарий" }
       }),
       invalidatesTags: ['CuttingOrder'],
     }),

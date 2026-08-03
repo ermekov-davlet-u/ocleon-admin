@@ -58,19 +58,57 @@ const PAGE_TITLES = {
   "/preview": "Предварительный просмотр",
 };
 
+
+
 function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
+  const [username, setUsername] = useState("");
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [notifCount] = useState(3); // заглушка
 
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isAdmin = username === "Admin";
+
+  const menuItems = [
+    { key: "/dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
+    { key: "/users", icon: <UserOutlined />, label: "Клиенты" },
+    { key: "/materials", icon: <AppstoreOutlined />, label: "Материалы" },
+    { key: "/invoices", icon: <FileTextOutlined />, label: "Накладная" },
+    { key: "/invoiceForm", icon: <FileTextOutlined />, label: "Приход товара" },
+    // { key: "/order-visual", icon: <ScissorOutlined />, label: "Резка" },
+    { key: "/employee", icon: <TeamOutlined />, label: "Работники" },
+    { key: "/branches", icon: <BankOutlined />, label: "Филиалы" },
+    { key: "/discount", icon: <BankOutlined />, label: "Скидки" },
+    { key: "/types", icon: <TagsOutlined />, label: "Вид резки" },
+    { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
+    { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
+    { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
+    { key: "/folders", icon: <SkinOutlined />, label: "Папки" },
+    { key: "/booking", icon: <SkinOutlined />, label: "Бронирования" },
+  ];
+
+
+  const filteredMenuItems = isAdmin
+    ? menuItems
+    : menuItems.filter(item =>
+      ["/invoices", "/folders", "/preview", "/booking", "/users"].includes(item.key)
+    );
+
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) { setIsAuth(false); setCheckingAuth(false); return; }
+    const savedUsername = localStorage.getItem("username");
+
+    if (!token) {
+      setIsAuth(false);
+      setCheckingAuth(false);
+      return;
+    }
+
+    setUsername(savedUsername || "");
     setIsAuth(true);
     setCheckingAuth(false);
   }, []);
@@ -89,9 +127,13 @@ function App() {
   if (!isAuth) {
     return (
       <LoginPage
-        onSuccess={(token) => {
+        onSuccess={(token, username) => {
           localStorage.setItem("token", token);
+          localStorage.setItem("username", username);
+
+          setUsername(username);
           setIsAuth(true);
+
           navigate("/dashboard");
           message.success("Вы успешно вошли!");
         }}
@@ -101,6 +143,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("username");
     setIsAuth(false);
     navigate("/");
     message.info("Вы вышли из системы");
@@ -183,22 +226,7 @@ function App() {
             border: "none",
             marginTop: 8,
           }}
-          items={[
-            { key: "/dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
-            { key: "/users", icon: <UserOutlined />, label: "Клиенты" },
-            { key: "/materials", icon: <AppstoreOutlined />, label: "Материалы" },
-            { key: "/invoices", icon: <FileTextOutlined />, label: "Накладная" },
-            { key: "/invoiceForm", icon: <FileTextOutlined />, label: "Приход товара" },
-            { key: "/order-visual", icon: <ScissorOutlined />, label: "Резка" },
-            { key: "/employee", icon: <TeamOutlined />, label: "Работники" },
-            { key: "/branches", icon: <BankOutlined />, label: "Филиалы" },
-            { key: "/discount", icon: <BankOutlined />, label: "Скидки" },
-            { key: "/types", icon: <TagsOutlined />, label: "Вид резки" },
-            { key: "/products", icon: <SkinOutlined />, label: "Для резки" },
-            { key: "/devices", icon: <SkinOutlined />, label: "Типы устройств" },
-            { key: "/preview", icon: <SkinOutlined />, label: "Предварительный просмотр" },
-            { key: "/folders", icon: <SkinOutlined />, label: "Папки" },
-          ]}
+          items={filteredMenuItems}
         />
       </Sider>
 

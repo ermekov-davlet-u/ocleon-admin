@@ -23,11 +23,14 @@ const LoginPage = ({ onSuccess }) => {
         response?.accessToken ||
         response?.access_token;
 
+      const username = response?.username || response?.userName;
+
       if (!token) {
         console.warn("JWT токен не найден в ответе", response);
       }
 
-      onSuccess(token);
+      onSuccess(token, username);
+
     } catch (err) {
       console.error("Login error:", err);
       message.error("Неверный логин или пароль");

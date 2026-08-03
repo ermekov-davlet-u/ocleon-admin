@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Table, Button, Tag, Space, message, Modal, Grid, Card, Form, Input, InputNumber,
   Switch, Divider, Select, DatePicker, Row, Col, Empty, Tooltip,
@@ -52,21 +52,6 @@ const RULE_LABEL = {
   MANUAL: 'Ручная',
 };
 
-function calcDiscountedAmount(base, discount) {
-  if (!discount || !base) return base ?? 0;
-  switch (discount.type) {
-    case 'PERCENT':
-    case 'PERCENTAGE':
-      return Math.max(0, base - (base * discount.value) / 100);
-    case 'FIXED':
-      return Math.max(0, base - discount.value);
-    case 'PRICE_OVERRIDE':
-      return discount.value;
-    default:
-      return base;
-  }
-}
-
 const canUseWarranty = (record) => {
   if (!record?.createdAt) return false;
 
@@ -91,8 +76,6 @@ const canUseWarranty = (record) => {
 
   return daysSince <= 365;
 };
-
-
 
 // TODO: подставьте реальное поле с URL файла чертежа, если оно отличается.
 // Здесь я предполагаю, что cuttingJob.file либо уже содержит готовый url,
@@ -132,7 +115,6 @@ async function runCuttingJob(filePath) {
 
   const extensions = ['eps', 'cdr'];
 
-  // 1. Перебираем расширения, пока не найдем рабочий файл
   for (const ext of extensions) {
     const currentFileName = `${baseName}.${ext}`;
     const currentFileUrl = `${host}${dirPrefix}/${currentFileName}`;
@@ -154,9 +136,6 @@ async function runCuttingJob(filePath) {
     throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
   }
 
-  // 1.1. Если нашли .cdr — сначала конвертируем его в .eps,
-  // после чего файл "падает" в общий блок конвертации .eps -> .plt ниже
-  // (итоговая цепочка: cdr -> eps -> plt -> резка).
   if (foundExt === 'cdr') {
     const cdrFormData = new FormData();
     cdrFormData.append('file', fileBlob, finalFileName);
@@ -171,14 +150,11 @@ async function runCuttingJob(filePath) {
       throw new Error('Не удалось сконвертировать .cdr файл в .eps на сервере');
     }
 
-    // ВАЖНО: подстройте под реальный формат ответа /folder/cdr-to-eps,
-    // если сервер отдаёт не бинарный файл, а JSON/текст со ссылкой.
     fileBlob = await cdrResponse.blob();
     finalFileName = finalFileName.replace(/\.cdr$/i, '.eps');
     foundExt = 'eps';
   }
 
-  // 1.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
   if (foundExt === 'eps') {
     const convertFormData = new FormData();
     convertFormData.append('file', fileBlob, finalFileName);
@@ -193,14 +169,11 @@ async function runCuttingJob(filePath) {
       throw new Error('Не удалось сконвертировать .eps файл на сервере');
     }
 
-    // ВАЖНО: подстройте под реальный формат ответа /folder/convert,
-    // если сервер отдаёт не бинарный файл, а JSON со ссылкой.
     fileBlob = await convertResponse.blob();
     finalFileName = finalFileName.replace(/\.eps$/i, '.plt');
     foundExt = 'plt';
   }
 
-  // 2. Отправляем итоговый .plt на локальный станок
   const formdata = new FormData();
   formdata.append('file', fileBlob, finalFileName);
 
@@ -219,20 +192,20 @@ const CuttingOrdersTable = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
-  // Прогрессивная подгрузка заказов по 100 записей за раз (см. hooks/useAllOrders.js)
   const [page, setPage] = useState(1);
 
   const {
-    data,
-    isLoading,
-    isFetching,
-    refetch: reload,
-  } = useGetOrdersQuery(
-    { page, limit: 100 },
-    {
-      refetchOnMountOrArgChange: true,
-    }
-  );
+  data,
+  isLoading,
+  isFetching,
+  refetch: reload,
+} = useGetOrdersQuery(
+  { page, limit: 100 },
+  {
+    refetchOnMountOrArgChange: true,
+    pollingInterval: 120000, // 2 минуты (в миллисекундах)
+  }
+);
 
   const orders = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -262,26 +235,10 @@ const CuttingOrdersTable = () => {
   const [isWarrantyModalOpen, setIsWarrantyModalOpen] = useState(false);
   const [isWarrantyCuttingLoading, setIsWarrantyCuttingLoading] = useState(false);
 
-  // ── Состояния для модалки брака + повторной оклейки со скидкой ────────────
+  // ── Состояния для модалки брака ────────────────────────────────────────
   const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
   const [defectRecord, setDefectRecord] = useState(null);
-  const [repeatDiscount, setRepeatDiscount] = useState(null);
-  const [repeatSumma, setRepeatSumma] = useState(undefined);
-  const [manualRepeatSumma, setManualRepeatSumma] = useState(false);
-
-  // Автопересчёт суммы повторной оклейки при выборе скидки
-  useEffect(() => {
-    if (!defectRecord || manualRepeatSumma) return;
-    const base = defectRecord.totalAmount ?? defectRecord.finalAmount ?? 0;
-    setRepeatSumma(calcDiscountedAmount(base, repeatDiscount));
-  }, [defectRecord, repeatDiscount, manualRepeatSumma]);
-
-  const repeatBaseSumma = defectRecord?.totalAmount ?? defectRecord?.finalAmount ?? 0;
-  const repeatDiscountAmount = useMemo(() => {
-    if (!repeatBaseSumma || !repeatDiscount) return 0;
-    if (repeatDiscount.type === 'PRICE_OVERRIDE') return repeatBaseSumma - repeatDiscount.value;
-    return repeatBaseSumma - calcDiscountedAmount(repeatBaseSumma, repeatDiscount);
-  }, [repeatBaseSumma, repeatDiscount]);
+  const [defectComment, setDefectComment] = useState('');
 
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
@@ -361,7 +318,6 @@ const CuttingOrdersTable = () => {
     try {
       const values = await form.validateFields();
 
-      // Формируем DTO для бэкенда @Patch(':id')
       const dto = {
         clientPhone: values.clientPhone,
         clientName: values.clientName || 'Не указано',
@@ -369,8 +325,6 @@ const CuttingOrdersTable = () => {
         quantity: values.quantity,
         isWarrantyOrder: values.isWarrantyOrder,
         totalAmount: values.totalAmount ?? 0,
-        // TODO: подтвердите, что бэкенд ожидает именно materialId в PATCH заказа
-        // (если материал хранится на cuttingJob, возможно эндпоинт другой)
         materialId: values.materialId,
         discountId: values.discountId ?? null,
       };
@@ -398,10 +352,8 @@ const CuttingOrdersTable = () => {
   };
 
   // Подтверждение гарантийной оклейки:
-  // 1) создаёт новую (гарантийную) накладную в CRM
+  // 1) создаёт новую (гарантийную) накладную в CRM (сумма считается с учётом скидки на бэкенде)
   // 2) затем отправляет файл чертежа на резку (cdr -> eps -> plt -> localhost:5000/cut)
-  // Если шаг резки не удался — накладная в CRM всё равно остаётся созданной,
-  // пользователю просто показывается ошибка.
   const handleConfirmWarranty = async () => {
     if (!warrantyRecord) return;
 
@@ -425,27 +377,27 @@ const CuttingOrdersTable = () => {
       message.error(
         error?.message || 'Гарантийная накладная создана, но отправить файл на резку не удалось'
       );
-      // Модалку не закрываем — накладная уже создана, пользователь может
-      // разобраться с файлом и не потерять контекст заказа.
     } finally {
       setIsWarrantyCuttingLoading(false);
       reload();
     }
   };
 
-  // ── Брак + повторная оклейка со скидкой ────────────────────────────────────
+  // ── Брак ─────────────────────────────────────────────────────────────────
   const handleOpenDefectModal = (record) => {
     setDefectRecord(record);
-    setRepeatDiscount(null);
-    setRepeatSumma(undefined);
-    setManualRepeatSumma(false);
+    setDefectComment('');
     setIsDefectModalOpen(true);
   };
 
   const handleMarkDefect = async () => {
     if (!defectRecord) return;
     try {
-      await changeStatus({ id: defectRecord.id, status: CuttingOrderStatus.DEFECT }).unwrap();
+      await changeStatus({
+        id: defectRecord.id,
+        status: CuttingOrderStatus.DEFECT,
+        comment: defectComment || undefined,
+      }).unwrap();
       message.success('Заказ помечен как брак');
       setIsDefectModalOpen(false);
       setDefectRecord(null);
@@ -458,7 +410,11 @@ const CuttingOrdersTable = () => {
   const handleRepeatFromDefect = async () => {
     if (!defectRecord) return;
     try {
-      await changeStatus({ id: defectRecord.id, status: CuttingOrderStatus.DEFECT }).unwrap();
+      await changeStatus({
+        id: defectRecord.id,
+        status: CuttingOrderStatus.DEFECT,
+        comment: defectComment || undefined,
+      }).unwrap();
 
       const payload = {
         cuttingJobId: defectRecord.cuttingJob?.id,
@@ -468,10 +424,9 @@ const CuttingOrdersTable = () => {
         clientPhone: defectRecord.client?.phone || '',
         clientEmail: defectRecord.client?.email || undefined,
         materialId: defectRecord.cuttingJob?.material?.id,
-        discountId: repeatDiscount?.id || undefined,
         isDefectReworkOrder: true,
         parentOrderId: defectRecord.id,
-        ...(manualRepeatSumma || repeatDiscount?.type === 'PRICE_OVERRIDE' ? { summa: repeatSumma } : {}),
+        // discountId и summa не передаём — скидки при повторной оклейке по браку не применяются
       };
 
       await createOrder(payload).unwrap();
@@ -495,6 +450,15 @@ const CuttingOrdersTable = () => {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const canMarkDefect = (record) => {
+    if (!record.createdAt) return false;
+
+    const hours =
+      (Date.now() - new Date(record.createdAt).getTime()) / 3600000;
+
+    return hours <= 24;
   };
 
   const renderActions = (record) => {
@@ -538,7 +502,7 @@ const CuttingOrdersTable = () => {
         )}
 
         {/* Редактировать можно только пока заказ не переведён в "Готово" */}
-        {!isDone && (
+        {!isDone && !isDefect && !record?.isWarrantyOrder && (
           <Button
             block={isMobile}
             size="small"
@@ -590,7 +554,10 @@ const CuttingOrdersTable = () => {
                 </Tag>
               </div>
             )}
-            <div><b>Дата:</b> {formatDate(record.createdAt)}</div>
+            {record.defectComment && (
+              <div><b>Комментарий к браку:</b> {record.defectComment}</div>
+            )}
+            <div><b>Дата:</b> {new Date(record.createdAt).toLocaleString()}</div>
           </div>
 
           <div style={{ marginTop: 12 }}>{renderActions(record)}</div>
@@ -598,15 +565,6 @@ const CuttingOrdersTable = () => {
       ),
     },
   ];
-
-  const canMarkDefect = (record) => {
-    if (!record.createdAt) return false;
-
-    const hours =
-      (Date.now() - new Date(record.createdAt).getTime()) / 3600000;
-
-    return hours <= 24;
-  };
 
   const desktopColumns = [
     { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a, b) => a.id - b.id, width: 70 },
@@ -661,7 +619,34 @@ const CuttingOrdersTable = () => {
     },
     { title: 'Сумма', dataIndex: 'totalAmount', key: 'totalAmount', width: 90 },
     { title: 'Итого', dataIndex: 'finalAmount', key: 'finalAmount', width: 90 },
-    { title: 'Дата создания', dataIndex: 'createdAt', key: 'createdAt', render: formatDate, width: 140 },
+    {
+      title: 'Комментарий к браку',
+      key: 'defectComment',
+      render: (_, r) =>
+        r.defectComment ? (
+          <Tooltip title={r.defectComment}>
+            <span style={{
+              display: 'inline-block',
+              maxWidth: 160,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              verticalAlign: 'bottom',
+            }}>
+              {r.defectComment}
+            </span>
+          </Tooltip>
+        ) : '—',
+      width: 160,
+    },
+    {
+      title: 'Дата создания', dataIndex: 'createdAt', key: 'createdAt', render: (_, record) => {
+        const s = record.createdAt;
+        const formatted =
+          `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)} ${s.slice(11, 16)}`;
+        return formatted;
+      }, width: 140
+    },
     { title: 'Действия', key: 'actions', render: (_, record) => renderActions(record), width: 320, fixed: 'right' },
   ];
 
@@ -733,12 +718,6 @@ const CuttingOrdersTable = () => {
         </Col>
       </Row>
 
-      {/* {isLoadingMore && (
-        <div style={{ marginBottom: 12, fontSize: 12, color: '#888' }}>
-          Догружаем оставшиеся заказы (по 100 записей за раз)... Сейчас загружено: {orders.length}
-        </div>
-      )} */}
-
       <Table
         key={page}
         rowKey="id"
@@ -751,7 +730,6 @@ const CuttingOrdersTable = () => {
           total,
           showTotal: (total) => `Всего: ${total}`,
           onChange: (newPage) => {
-            console.log('CHANGE PAGE', newPage);
             setPage(newPage);
           }
         }}
@@ -913,14 +891,14 @@ const CuttingOrdersTable = () => {
             <div>Клиент: <b>{warrantyRecord.client?.phone}</b> {warrantyRecord.client?.name ? `(${warrantyRecord.client.name})` : ''}</div>
             <div>Количество: <b>{warrantyRecord.quantity ?? 1}</b></div>
 
-            <Tooltip title="Нажимая «Начать резку», вы создаёте новую гарантийную накладную по этому же файлу, а исходный заказ помечается как использовавший гарантию. Затем файл автоматически отправляется на станок.">
+            <Tooltip title="Нажимая «Начать резку», вы создаёте новую гарантийную накладную по этому же файлу со скидкой «Гарантийная оклейка», а исходный заказ помечается как использовавший гарантию. Затем файл автоматически отправляется на станок.">
               <span style={{ fontSize: 12, color: '#999' }}>ⓘ Что произойдёт при подтверждении</span>
             </Tooltip>
           </Space>
         )}
       </Modal>
 
-      {/* Модальное окно брака + повторной оклейки со скидкой */}
+      {/* Модальное окно брака */}
       <Modal
         title={<span style={{ color: '#f5222d' }}>⚠️ Пометить как брак — заказ #{defectRecord?.id}</span>}
         open={isDefectModalOpen}
@@ -965,54 +943,21 @@ const CuttingOrdersTable = () => {
             <div>Сумма заказа: <b>{defectRecord.finalAmount ?? defectRecord.totalAmount ?? '-'} сом</b></div>
 
             <Divider style={{ margin: '8px 0' }} orientation="left">
-              Повторная оклейка (опционально)
+              Комментарий к браку
             </Divider>
 
-            <Select
-              allowClear
-              style={{ width: '100%' }}
-              placeholder="Скидка на повторную оклейку (опционально)"
-              value={repeatDiscount?.id ?? null}
-              onChange={(id) => {
-                setRepeatDiscount(id ? discounts.find((d) => d.id === id) ?? null : null);
-                setManualRepeatSumma(false);
-              }}
-            >
-              {discounts.filter((d) => d.isActive).map((d) => (
-                <Option key={d.id} value={d.id}>
-                  {d.name ?? RULE_LABEL[d.rule]}{' '}
-                  <span style={{ color: '#999', fontSize: 12 }}>
-                    {d.type === 'PERCENT'
-                      ? `−${d.value}%`
-                      : d.type === 'PRICE_OVERRIDE'
-                        ? `= ${d.value} сом`
-                        : `−${d.value} сом`}
-                  </span>
-                </Option>
-              ))}
-            </Select>
-
-            <InputNumber
-              style={{ width: '100%' }}
-              value={repeatSumma}
-              onChange={(v) => {
-                setRepeatSumma(v);
-                setManualRepeatSumma(true);
-              }}
-              placeholder="Итоговая сумма повторной оклейки"
-              addonAfter="сом"
+            <Input.TextArea
+              rows={3}
+              placeholder="Опишите причину брака (что не так с оклейкой)"
+              value={defectComment}
+              onChange={(e) => setDefectComment(e.target.value)}
             />
-
-            {repeatDiscount && repeatDiscountAmount > 0 && (
-              <div style={{ fontSize: 12, color: '#f5222d' }}>
-                −{Math.round(repeatDiscountAmount)} сом (было {repeatBaseSumma} сом)
-              </div>
-            )}
 
             <p style={{ color: '#888', fontSize: 12 }}>
               «Повторить оклейку» пометит текущий заказ как брак и создаст новую накладную
-              с тем же устройством, материалом и типом резки — при желании со скидкой.
+              с тем же устройством, материалом и типом резки — без скидки и без суммы.
               «Подтвердить брак» просто отметит заказ как брак без создания новой оклейки.
+              Комментарий сохранится в обоих случаях.
             </p>
           </Space>
         )}
