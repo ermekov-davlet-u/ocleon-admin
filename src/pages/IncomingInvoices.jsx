@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 import {
   useChangeOrderStatusMutation,
   useCreateOrderMutation,
+  useDeleteOrderMutation,
   useGetOrdersQuery,
   useUpdateOrderMutation,
   useUseWarrantyMutation,
@@ -195,17 +196,17 @@ const CuttingOrdersTable = () => {
   const [page, setPage] = useState(1);
 
   const {
-  data,
-  isLoading,
-  isFetching,
-  refetch: reload,
-} = useGetOrdersQuery(
-  { page, limit: 100 },
-  {
-    refetchOnMountOrArgChange: true,
-    pollingInterval: 120000, // 2 минуты (в миллисекундах)
-  }
-);
+    data,
+    isLoading,
+    isFetching,
+    refetch: reload,
+  } = useGetOrdersQuery(
+    { page, limit: 100 },
+    {
+      refetchOnMountOrArgChange: true,
+      pollingInterval: 120000, // 2 минуты (в миллисекундах)
+    }
+  );
 
   const orders = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -217,7 +218,7 @@ const CuttingOrdersTable = () => {
   const [createOrder] = useCreateOrderMutation();
   const [updateOrder] = useUpdateOrderMutation();
   const [warrantys, { isLoading: isWarrantyLoading }] = useUseWarrantyMutation();
-
+  const [deleteOrder] = useDeleteOrderMutation();
   // ── Фильтры ──────────────────────────────────────────────────────────────
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState(null);
@@ -289,6 +290,25 @@ const CuttingOrdersTable = () => {
     } catch {
       message.error('Ошибка при обновлении статуса');
     }
+  };
+
+  const handleDelete = (id) => {
+    Modal.confirm({
+      title: 'Подтверждение удаления',
+      content: 'Вы уверены, что хотите удалить этот заказ?',
+      okText: 'Да',
+      cancelText: 'Отмена',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteOrder(id).unwrap();
+          message.success('Заказ удален');
+          reload();
+        } catch {
+          message.error('Ошибка при удалении');
+        }
+      },
+    });
   };
 
   // Открытие модалки и предзаполнение формы данными.
@@ -500,6 +520,10 @@ const CuttingOrdersTable = () => {
             Брак
           </Button>
         )}
+
+        {/* <Button block={isMobile} size="small" danger onClick={() => handleDelete(record.id)}>
+          Удалить
+        </Button> */}
 
         {/* Редактировать можно только пока заказ не переведён в "Готово" */}
         {!isDone && !isDefect && !record?.isWarrantyOrder && (

@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
     Layout, Breadcrumb, Input, Button, Card, Row, Col,
-    Modal, Form, message, Spin, Empty, Tooltip, Space, Upload, Popconfirm
+    Modal, Form, message, Spin, Empty, Tooltip, Space, Upload, Popconfirm, Select
 } from 'antd';
 import {
     FolderOutlined, FileOutlined, ArrowLeftOutlined,
     PlusOutlined, SearchOutlined, HomeOutlined,
     UploadOutlined, CloseOutlined, ScissorOutlined,
-    DeleteOutlined, EditOutlined
+    DeleteOutlined, EditOutlined, InboxOutlined
 } from '@ant-design/icons';
 
 import {
@@ -23,6 +23,7 @@ import {
 import { useCreateSimpleOrderMutation } from '../store/api/orderApi';
 
 const { Content } = Layout;
+const { Dragger } = Upload;
 
 // (Функция buildFolderPath остается без изменений)
 const buildFolderPath = (folderId, allFolders) => {
@@ -38,6 +39,13 @@ const buildFolderPath = (folderId, allFolders) => {
     }
     return pathSegments.join('/');
 };
+
+// Разрешённые расширения для загрузки. Держим в одном месте,
+// чтобы легко расширить список форматов в будущем при необходимости.
+const ALLOWED_EXTENSIONS = ['.eps'];
+
+const isAllowedFile = (fileName = '') =>
+    ALLOWED_EXTENSIONS.some(ext => fileName.toLowerCase().endsWith(ext));
 
 export default function FolderManager() {
     const { data: folders = [], isLoading: isFetchLoading, refetch: refetchFolders } = useGetFoldersQuery();
@@ -55,14 +63,27 @@ export default function FolderManager() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [isCuttingLoading, setIsCuttingLoading] = useState(false);
+    const [isDragActive, setIsDragActive] = useState(false);
+    const [sortBy, setSortBy] = useState("date"); // date | name
 
     // Состояния для модалок
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [renameTarget, setRenameTarget] = useState(null); // { type: 'folder'|'file', id, name }
+    const [renameTarget, setRenameTarget] = useState(null); // { type: 'folder', id, name }
 
     const [form] = Form.useForm();
     const [renameForm] = Form.useForm();
     const currentFolder = useMemo(() => history[history.length - 1], [history]);
+
+    // Проверка формата файла перед загрузкой (и через кнопку, и через drag&drop).
+    // Upload.LIST_IGNORE не даёт antd добавить файл во внутренний список и,
+    // соответственно, не даёт запуститься customRequest для неподходящего файла.
+    const beforeUpload = (file) => {
+        if (!isAllowedFile(file.name)) {
+            message.error(`Файл "${file.name}" отклонён: принимаются только файлы формата .eps`);
+            return Upload.LIST_IGNORE;
+        }
+        return true;
+    };
 
     // Хендлер загрузки файла
     const handleUpload = async (options) => {
@@ -154,6 +175,22 @@ export default function FolderManager() {
         setSelectedFile(null);
     };
 
+    const sortItems = (items) => {
+        const data = [...items];
+
+        if (sortBy === "name") {
+            return data.sort((a, b) =>
+                (a.name || "").localeCompare(b.name || "", "ru", {
+                    sensitivity: "base",
+                })
+            );
+        }
+
+        return data.sort(
+            (a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0)
+        );
+    };
+
     // Фильтрация и подготовка данных папок/файлов
     const { visibleFolders, visibleFiles } = useMemo(() => {
         if (searchQuery.trim() !== '') {
@@ -175,7 +212,10 @@ export default function FolderManager() {
                     });
                 }
             });
-            return { visibleFolders: filteredFolders, visibleFiles: filteredFiles };
+            return {
+                visibleFolders: sortItems(filteredFolders),
+                visibleFiles: sortItems(filteredFiles),
+            };
         }
 
         if (currentFolder.id === null) {
@@ -183,7 +223,10 @@ export default function FolderManager() {
                 folders.flatMap(f => f.children?.map(child => child.id) || [])
             );
             const rootFolders = folders.filter(f => !allChildrenIds.has(f.id));
-            return { visibleFolders: rootFolders, visibleFiles: [] };
+            return {
+                visibleFolders: sortItems(rootFolders),
+                visibleFiles: [],
+            };
         } else {
             const activeData = folders.find(f => f.id === currentFolder.id);
             const fullPath = buildFolderPath(currentFolder.id, folders);
@@ -196,11 +239,11 @@ export default function FolderManager() {
                 }));
 
             return {
-                visibleFolders: activeData?.children || [],
-                visibleFiles: files
+                visibleFolders: sortItems(activeData?.children || []),
+                visibleFiles: sortItems(files),
             };
         }
-    }, [folders, currentFolder, searchQuery]);
+    }, [folders, currentFolder, searchQuery, sortBy]);
 
     const selectedFileSrc = useMemo(() => {
         if (!selectedFile) return '';
@@ -252,8 +295,6 @@ export default function FolderManager() {
             }
 
             // 1.1. Если нашли .cdr — сначала конвертируем его в .eps.
-            // После этого шага файл "падает" в общий блок конвертации .eps -> .plt ниже,
-            // то есть итоговая цепочка для .cdr выглядит так: cdr -> eps -> plt -> резка.
             if (foundExt === 'cdr') {
                 console.log(`Файл ${finalFileName} — это .cdr, отправляем на конвертацию в .eps...`);
 
@@ -270,10 +311,6 @@ export default function FolderManager() {
                     throw new Error('Не удалось сконвертировать .cdr файл в .eps на сервере');
                 }
 
-                // ВАЖНО: подстройте под реальный формат ответа /folder/cdr-to-eps.
-                // Если сервер отдаёт бинарный .eps файл — .blob() подойдёт (как ниже).
-                // Если отдаёт JSON/текст со ссылкой на файл — замените на .text()/.json()
-                // и затем сделайте fetch по полученной ссылке, чтобы получить сам .eps как blob.
                 fileBlob = await cdrResponse.blob();
                 finalFileName = finalFileName.replace(/\.cdr$/i, '.eps');
                 foundExt = 'eps';
@@ -299,9 +336,6 @@ export default function FolderManager() {
                     throw new Error('Не удалось сконвертировать .eps файл на сервере');
                 }
 
-                // ВАЖНО: подстройте под реальный формат ответа /folder/convert.
-                // Если сервер отдаёт бинарный файл — .blob() подойдёт.
-                // Если отдаёт JSON с ссылкой на файл — нужно поменять на .json() и затем fetch по ссылке.
                 fileBlob = await convertResponse.blob();
                 finalFileName = finalFileName.replace(/\.eps$/i, '.plt');
                 foundExt = 'plt';
@@ -325,9 +359,6 @@ export default function FolderManager() {
 
             message.success(`Задание "${finalFileName}" успешно отправлено на станок!`);
 
-            // 4. Только после того, как станок реально принял файл — регистрируем накладную в CRM.
-            // Если резка не удалась (файл не найден / ошибка конвертации / станок отклонил),
-            // накладная не создаётся — до этого места код просто не дойдёт.
             try {
                 await createOrder({ fileId: selectedFile.id }).unwrap();
                 message.success('Накладная зарегистрирована в CRM');
@@ -336,8 +367,6 @@ export default function FolderManager() {
                 message.error(
                     orderError?.data?.message || 'Резка отправлена на станок, но не удалось создать накладную в CRM'
                 );
-                // Резку не отменяем — файл уже ушёл на станок, просто предупреждаем,
-                // что накладную нужно будет создать вручную.
             }
 
         } catch (error) {
@@ -348,8 +377,25 @@ export default function FolderManager() {
         }
     };
 
+
+
     return (
         <Layout style={{ minHeight: 'calc(100vh - 140px)', background: '#f5f5f5' }}>
+            {/* Подсветка зоны при перетаскивании файла поверх неё */}
+            <style>{`
+                .file-manager-dropzone .ant-upload.ant-upload-drag {
+                    background: transparent;
+                    border: none;
+                    padding: 0;
+                }
+                .file-manager-dropzone.drag-active {
+                    outline: 2px dashed #1890ff;
+                    outline-offset: 6px;
+                    background: rgba(24, 144, 255, 0.04);
+                    border-radius: 12px;
+                }
+            `}</style>
+
             <Content style={{ maxWidth: '1900px', width: 'calc(100% - 24px)', margin: '0 auto' }}>
 
                 {/* ТУЛБАР */}
@@ -366,6 +412,17 @@ export default function FolderManager() {
                             allowClear
                         />
                     </Col>
+                    <Col xs={24} sm={8} md={4}>
+                        <Select
+                            style={{ width: "100%" }}
+                            value={sortBy}
+                            onChange={setSortBy}
+                            options={[
+                                { value: "date", label: "По дате" },
+                                { value: "name", label: "По названию" },
+                            ]}
+                        />
+                    </Col>
                     <Col>
                         <Space>
                             {history.length > 1 && !searchQuery && (
@@ -373,12 +430,14 @@ export default function FolderManager() {
                             )}
 
                             <Upload
+                                accept=".eps"
+                                beforeUpload={beforeUpload}
                                 customRequest={handleUpload}
                                 showUploadList={false}
                                 disabled={isUploading || isFetchLoading}
                             >
                                 <Button icon={<UploadOutlined />} loading={isUploading} disabled={isFetchLoading}>
-                                    Загрузить файл
+                                    Загрузить файл (.eps)
                                 </Button>
                             </Upload>
 
@@ -409,182 +468,215 @@ export default function FolderManager() {
                     </Breadcrumb>
                 )}
 
-                <Spin spinning={isFetchLoading} size="large" tip="Чтение структуры папок...">
-                    {visibleFolders.length === 0 && visibleFiles.length === 0 ? (
-                        <Empty description="Папка пуста или ничего не найдено" style={{ marginTop: '60px' }} />
-                    ) : (
-                        <Row gutter={[24, 24]}>
-                            {/* СЕТКА ЭЛЕМЕНТОВ */}
-                            <Col xs={24} lg={selectedFile ? 16 : 24} style={{ transition: 'all 0.3s' }}>
-                                {/* ПАПКИ */}
-                                {visibleFolders.length > 0 && (
-                                    <div style={{ marginBottom: '24px' }}>
-                                        <h3 style={{ marginBottom: '12px', color: '#595959' }}>Папки ({visibleFolders.length})</h3>
-                                        <Row gutter={[16, 16]}>
-                                            {visibleFolders.map((folder) => (
-                                                <Col xs={12} sm={12} md={8} lg={selectedFile ? 8 : 6} key={folder.id}>
-                                                    <Card
-                                                        hoverable
-                                                        className="folder-card"
-                                                        bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
-                                                        onClick={() => handleFolderClick(folder.id, folder.name)}
-                                                        style={{ borderRadius: '8px', border: '1px solid #f0f0f0' }}
-                                                    >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden', flex: 1 }}>
-                                                            <FolderOutlined style={{ fontSize: '28px', color: '#ffc069', flexShrink: 0 }} />
-                                                            <Tooltip title={folder.name}>
-                                                                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                    {folder.name}
-                                                                </span>
-                                                            </Tooltip>
-                                                        </div>
-                                                        {/* Кнопки управления папкой */}
-                                                        <Space onClick={(e) => e.stopPropagation()}>
-                                                            <Button
-                                                                type="text"
-                                                                size="small"
-                                                                icon={<EditOutlined style={{ color: '#1890ff' }} />}
-                                                                onClick={() => {
-                                                                    setRenameTarget({ type: 'folder', id: folder.id, name: folder.name });
-                                                                    renameForm.setFieldsValue({ newName: folder.name });
-                                                                }}
-                                                            />
-                                                            <Popconfirm
-                                                                title="Удалить папку и всё её содержимое?"
-                                                                onConfirm={(e) => handleDeleteFolder(folder.id, e)}
-                                                                okText="Да"
-                                                                cancelText="Нет"
-                                                            >
-                                                                <Button type="text" size="small" icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />} />
-                                                            </Popconfirm>
-                                                        </Space>
-                                                    </Card>
-                                                </Col>
-                                            ))}
-                                        </Row>
-                                    </div>
-                                )}
-
-                                {/* ФАЙЛЫ */}
-                                {visibleFiles.length > 0 && (
-                                    <div style={{ marginBottom: '24px' }}>
-                                        <h3 style={{ marginBottom: '12px', color: '#595959' }}>Файлы ({visibleFiles.length})</h3>
-                                        <Row gutter={[16, 16]}>
-                                            {visibleFiles.map((file) => {
-                                                const isCurrentSelected = selectedFile?.id === file.id;
-                                                return (
-                                                    <Col xs={12} sm={12} md={8} lg={selectedFile ? 8 : 6} key={file.id}>
+                {/*
+                    Зона Drag&Drop: оборачивает всю сетку папок/файлов в Dragger.
+                    openFileDialogOnClick=false — клик по карточкам работает как раньше
+                    (открытие папки / выбор файла), диалог выбора файла не открывается
+                    случайно. Загрузка запускается только реальным перетаскиванием файла
+                    из проводника ОС, либо кнопкой "Загрузить файл" в тулбаре.
+                */}
+                <Dragger
+                    name="file"
+                    multiple
+                    accept=".eps"
+                    showUploadList={false}
+                    beforeUpload={beforeUpload}
+                    customRequest={handleUpload}
+                    openFileDialogOnClick={false}
+                    disabled={isFetchLoading}
+                    className={`file-manager-dropzone${isDragActive ? ' drag-active' : ''}`}
+                    onDragEnter={() => setIsDragActive(true)}
+                    onDragLeave={() => setIsDragActive(false)}
+                    onDrop={() => setIsDragActive(false)}
+                >
+                    <Spin spinning={isFetchLoading} size="large" tip="Чтение структуры папок...">
+                        {visibleFolders.length === 0 && visibleFiles.length === 0 ? (
+                            <Empty
+                                description={
+                                    <span>
+                                        Папка пуста или ничего не найдено
+                                        <br />
+                                        <span style={{ color: '#8c8c8c', fontSize: '13px' }}>
+                                            <InboxOutlined /> Перетащите .eps файл сюда, чтобы загрузить
+                                        </span>
+                                    </span>
+                                }
+                                style={{ marginTop: '60px' }}
+                            />
+                        ) : (
+                            <Row gutter={[24, 24]}>
+                                {/* СЕТКА ЭЛЕМЕНТОВ */}
+                                <Col xs={24} lg={selectedFile ? 16 : 24} style={{ transition: 'all 0.3s' }}>
+                                    {/* ПАПКИ */}
+                                    {visibleFolders.length > 0 && (
+                                        <div style={{ marginBottom: '24px' }}>
+                                            <h3 style={{ marginBottom: '12px', color: '#595959' }}>Папки ({visibleFolders.length})</h3>
+                                            <Row gutter={[16, 16]}>
+                                                {visibleFolders.map((folder) => (
+                                                    <Col xs={12} sm={12} md={8} lg={selectedFile ? 8 : 6} key={folder.id}>
                                                         <Card
                                                             hoverable
-                                                            bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}
-                                                            onClick={() => setSelectedFile(file)}
-                                                            style={{
-                                                                borderRadius: '8px',
-                                                                background: isCurrentSelected ? '#e6f7ff' : '#fafafa',
-                                                                borderColor: isCurrentSelected ? '#1890ff' : '#f0f0f0',
-                                                                boxShadow: isCurrentSelected ? '0 0 0 2px rgba(24, 144, 255, 0.2)' : 'none',
-                                                                transition: 'all 0.2s'
-                                                            }}
+                                                            className="folder-card"
+                                                            bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
+                                                            onClick={() => handleFolderClick(folder.id, folder.name)}
+                                                            style={{ borderRadius: '8px', border: '1px solid #f0f0f0' }}
                                                         >
-                                                            <FileOutlined style={{ fontSize: '26px', color: '#40a9ff', flexShrink: 0 }} />
-                                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                                                <Tooltip title={`Файл: ${file.name}`}>
-                                                                    <span style={{ color: '#262626', fontWeight: 500 }}>{file.name}</span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden', flex: 1 }}>
+                                                                <FolderOutlined style={{ fontSize: '28px', color: '#ffc069', flexShrink: 0 }} />
+                                                                <Tooltip title={folder.name}>
+                                                                    <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {folder.name}
+                                                                    </span>
                                                                 </Tooltip>
                                                             </div>
+                                                            {/* Кнопки управления папкой */}
+                                                            <Space onClick={(e) => e.stopPropagation()}>
+                                                                <Button
+                                                                    type="text"
+                                                                    size="small"
+                                                                    icon={<EditOutlined style={{ color: '#1890ff' }} />}
+                                                                    onClick={() => {
+                                                                        setRenameTarget({ type: 'folder', id: folder.id, name: folder.name });
+                                                                        renameForm.setFieldsValue({ newName: folder.name });
+                                                                    }}
+                                                                />
+                                                                <Popconfirm
+                                                                    title="Удалить папку и всё её содержимое?"
+                                                                    onConfirm={(e) => handleDeleteFolder(folder.id, e)}
+                                                                    okText="Да"
+                                                                    cancelText="Нет"
+                                                                >
+                                                                    <Button type="text" size="small" icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />} />
+                                                                </Popconfirm>
+                                                            </Space>
                                                         </Card>
                                                     </Col>
-                                                );
-                                            })}
-                                        </Row>
-                                    </div>
-                                )}
-                            </Col>
-
-                            {/* САЙДБАР ПРЕДПРОСМОТРА */}
-                            {selectedFile && (
-                                <Col xs={24} lg={8}>
-                                    <Card
-                                        title={<span style={{ fontWeight: 600 }}>Просмотр чертежа</span>}
-                                        extra={<Button type="text" shape="circle" icon={<CloseOutlined />} onClick={() => setSelectedFile(null)} />}
-                                        style={{
-                                            borderRadius: '12px',
-                                            position: 'sticky',
-                                            top: '24px',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                                            border: '1px solid #d9d9d9'
-                                        }}
-                                    >
-                                        <div style={{
-                                            width: '100%', height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            background: '#fff', borderRadius: '8px', border: '1px solid #f0f0f0', padding: '16px', marginBottom: '16px', overflow: 'hidden'
-                                        }}>
-                                            <img
-                                                src={selectedFileSrc}
-                                                alt={selectedFile.name}
-                                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                                                onError={(e) => {
-                                                    message.error('Ошибка загрузки превью SVG.');
-                                                    e.target.style.display = 'none';
-                                                }}
-                                            />
+                                                ))}
+                                            </Row>
                                         </div>
+                                    )}
 
-                                        <div style={{ padding: '0 4px' }}>
-                                            <div style={{ color: '#8c8c8c', fontSize: '12px', marginBottom: '4px' }}>Имя файла:</div>
-                                            <div style={{ fontWeight: 600, fontSize: '15px', color: '#262626', wordBreak: 'break-all', marginBottom: '12px' }}>
-                                                {selectedFile.name}
-                                            </div>
-
-                                            <div style={{ color: '#8c8c8c', fontSize: '12px', marginBottom: '4px' }}>Полный путь ссылки:</div>
-                                            <div style={{ fontWeight: 500, color: '#1890ff', fontSize: '13px', wordBreak: 'break-all', marginBottom: '20px' }}>
-                                                {selectedFileSrc}
-                                            </div>
-
-                                            {/* Действия с выбранным файлом */}
-                                            <Space style={{ width: '100%', marginBottom: '12px' }} direction="vertical">
-                                                <Button
-                                                    block
-                                                    icon={<EditOutlined />}
-                                                    onClick={() => {
-                                                        setRenameTarget({ type: 'file', id: selectedFile.id, name: selectedFile.name });
-                                                        renameForm.setFieldsValue({ newName: selectedFile.name });
-                                                    }}
-                                                >
-                                                    Переименовать файл
-                                                </Button>
-
-                                                <Popconfirm
-                                                    title="Удалить этот файл с сервера?"
-                                                    onConfirm={() => handleDeleteFile(selectedFile.id)}
-                                                    okText="Да"
-                                                    cancelText="Нет"
-                                                >
-                                                    <Button block danger icon={<DeleteOutlined />}>
-                                                        Удалить файл
-                                                    </Button>
-                                                </Popconfirm>
-                                            </Space>
-
-                                            <Button
-                                                type="primary"
-                                                danger
-                                                block
-                                                size="large"
-                                                icon={<ScissorOutlined />}
-                                                loading={isCuttingLoading || isOrderCreating}
-                                                onClick={handleJustCut}
-                                                style={{ borderRadius: '8px', fontWeight: 600, height: '45px' }}
-                                            >
-                                                Отправить на резку
-                                            </Button>
+                                    {/* ФАЙЛЫ */}
+                                    {visibleFiles.length > 0 && (
+                                        <div style={{ marginBottom: '24px' }}>
+                                            <h3 style={{ marginBottom: '12px', color: '#595959' }}>Файлы ({visibleFiles.length})</h3>
+                                            <Row gutter={[16, 16]}>
+                                                {visibleFiles.map((file) => {
+                                                    const isCurrentSelected = selectedFile?.id === file.id;
+                                                    return (
+                                                        <Col xs={12} sm={12} md={8} lg={selectedFile ? 8 : 6} key={file.id}>
+                                                            <Card
+                                                                hoverable
+                                                                bodyStyle={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}
+                                                                onClick={() => setSelectedFile(file)}
+                                                                style={{
+                                                                    borderRadius: '8px',
+                                                                    background: isCurrentSelected ? '#e6f7ff' : '#fafafa',
+                                                                    borderColor: isCurrentSelected ? '#1890ff' : '#f0f0f0',
+                                                                    boxShadow: isCurrentSelected ? '0 0 0 2px rgba(24, 144, 255, 0.2)' : 'none',
+                                                                    transition: 'all 0.2s'
+                                                                }}
+                                                            >
+                                                                <FileOutlined style={{ fontSize: '26px', color: '#40a9ff', flexShrink: 0 }} />
+                                                                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                                                    <Tooltip title={`Файл: ${file.name.replace(/\.[^/.]+$/, "")}`}>
+                                                                        <span style={{ color: '#262626', fontWeight: 500 }}>{file.name.replace(/\.[^/.]+$/, "")}</span>
+                                                                    </Tooltip>
+                                                                </div>
+                                                            </Card>
+                                                        </Col>
+                                                    );
+                                                })}
+                                            </Row>
                                         </div>
-                                    </Card>
+                                    )}
                                 </Col>
-                            )}
-                        </Row>
-                    )}
-                </Spin>
+
+                                {/* САЙДБАР ПРЕДПРОСМОТРА */}
+                                {selectedFile && (
+                                    <Col xs={24} lg={8}>
+                                        <Card
+                                            title={<span style={{ fontWeight: 600 }}>Просмотр чертежа</span>}
+                                            extra={<Button type="text" shape="circle" icon={<CloseOutlined />} onClick={() => setSelectedFile(null)} />}
+                                            style={{
+                                                borderRadius: '12px',
+                                                position: 'sticky',
+                                                top: '24px',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                                                border: '1px solid #d9d9d9'
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '100%', height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                background: '#fff', borderRadius: '8px', border: '1px solid #f0f0f0', padding: '16px', marginBottom: '16px', overflow: 'hidden'
+                                            }}>
+                                                <img
+                                                    src={selectedFileSrc}
+                                                    alt={selectedFile.name}
+                                                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                                                    onError={(e) => {
+                                                        message.error('Ошибка загрузки превью SVG.');
+                                                        e.target.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div style={{ padding: '0 4px' }}>
+                                                <div style={{ color: '#8c8c8c', fontSize: '12px', marginBottom: '4px' }}>Имя файла:</div>
+                                                <div style={{ fontWeight: 600, fontSize: '15px', color: '#262626', wordBreak: 'break-all', marginBottom: '12px' }}>
+                                                    {selectedFile.name}
+                                                </div>
+
+                                                <div style={{ color: '#8c8c8c', fontSize: '12px', marginBottom: '4px' }}>Полный путь ссылки:</div>
+                                                <div style={{ fontWeight: 500, color: '#1890ff', fontSize: '13px', wordBreak: 'break-all', marginBottom: '20px' }}>
+                                                    {selectedFileSrc}
+                                                </div>
+
+                                                {/* Действия с выбранным файлом */}
+                                                <Space style={{ width: '100%', marginBottom: '12px' }} direction="vertical">
+                                                    <Button
+                                                        block
+                                                        icon={<EditOutlined />}
+                                                        onClick={() => {
+                                                            setRenameTarget({ type: 'file', id: selectedFile.id, name: selectedFile.name });
+                                                            renameForm.setFieldsValue({ newName: selectedFile.name });
+                                                        }}
+                                                    >
+                                                        Переименовать файл
+                                                    </Button>
+
+                                                    <Popconfirm
+                                                        title="Удалить этот файл с сервера?"
+                                                        onConfirm={() => handleDeleteFile(selectedFile.id)}
+                                                        okText="Да"
+                                                        cancelText="Нет"
+                                                    >
+                                                        <Button block danger icon={<DeleteOutlined />}>
+                                                            Удалить файл
+                                                        </Button>
+                                                    </Popconfirm>
+                                                </Space>
+
+                                                <Button
+                                                    type="primary"
+                                                    danger
+                                                    block
+                                                    size="large"
+                                                    icon={<ScissorOutlined />}
+                                                    loading={isCuttingLoading || isOrderCreating}
+                                                    onClick={handleJustCut}
+                                                    style={{ borderRadius: '8px', fontWeight: 600, height: '45px' }}
+                                                >
+                                                    Отправить на резку
+                                                </Button>
+                                            </div>
+                                        </Card>
+                                    </Col>
+                                )}
+                            </Row>
+                        )}
+                    </Spin>
+                </Dragger>
 
                 {/* Модалка создания папки */}
                 <Modal
