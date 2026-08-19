@@ -126,13 +126,31 @@ export default function FolderManager() {
                 await updateFolder({ id: renameTarget.id, name: values.newName }).unwrap();
                 message.success('Папка успешно переименована');
             } else {
-                await updateFile({ id: renameTarget.id, name: values.newName }, renameTarget.id).unwrap();
+                const extension = renameTarget.extension || '';
+
+                // Пользователь вводит только имя,
+                // расширение добавляем автоматически
+                const finalName = `${values.newName}${extension}`;
+
+                await updateFile(
+                    {
+                        id: renameTarget.id,
+                        name: finalName
+                    },
+                    renameTarget.id
+                ).unwrap();
+
                 message.success('Файл успешно переименован');
-                // Обновляем имя в сайдбаре, если этот файл сейчас выделен
+
                 if (selectedFile?.id === renameTarget.id) {
-                    setSelectedFile(prev => ({ ...prev, name: values.newName }));
+                    setSelectedFile(prev => ({
+                        ...prev,
+                        name: finalName
+                    }));
                 }
             }
+            await refetchFolders();
+
             setRenameTarget(null);
             renameForm.resetFields();
         } catch (err) {
@@ -345,124 +363,287 @@ export default function FolderManager() {
 
     const handleJustCut = async () => {
         if (!selectedFile) return;
+
         setIsCuttingLoading(true);
 
         try {
-            const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'));
-            const host = 'https://ocleon.333.kg/disk';
-            const folderPath = selectedFile.folderPath ? `/${selectedFile.folderPath}` : '';
+            const host = 'https://ocleon.333.kg';
+            const diskHost = `${host}`;
+
+            /*
+             * selectedFile.path — путь к SVG, который используется
+             * для предпросмотра.
+             *
+             * Например:
+             * folder/test.svg
+             *
+             * Из него получаем:
+             * folder/test.eps
+             * folder/test.cdr
+             */
+            const selectedPath = selectedFile.path || '';
+
+            const pathWithoutExtension = selectedPath.replace(
+                /\.[^/.]+$/,
+                ''
+            );
+
+            const folderPath = pathWithoutExtension.includes('/')
+                ? pathWithoutExtension.substring(
+                    0,
+                    pathWithoutExtension.lastIndexOf('/')
+                )
+                : '';
+
+            const baseName = pathWithoutExtension.substring(
+                pathWithoutExtension.lastIndexOf('/') + 1
+            );
 
             let fileBlob = null;
             let finalFileName = '';
             let foundExt = '';
 
+            /*
+             * Сначала пробуем найти реальные EPS/CDR.
+             * Не ограничиваемся только именем selectedFile.name,
+             * а строим путь от selectedFile.path.
+             */
             const extensions = ['eps', 'cdr'];
 
-            // 1. Перебираем расширения, пока не найдем рабочий файл
             for (const ext of extensions) {
                 const currentFileName = `${baseName}.${ext}`;
-                const currentFileUrl = `${host}${folderPath}/${currentFileName}`;
 
-                console.log(`Проверяем наличие файла: ${currentFileName}...`);
+                const currentFileUrl =
+                    `${diskHost}${folderPath ? `/${folderPath}` : ''}/${currentFileName}`;
+
+                console.log(`Проверяем наличие файла: ${currentFileUrl}`);
 
                 try {
                     const response = await fetch(currentFileUrl);
+
                     if (response.ok) {
                         fileBlob = await response.blob();
                         finalFileName = currentFileName;
                         foundExt = ext;
-                        console.log(`-> Отлично, файл ${currentFileName} найден на сервере!`);
+
+                        console.log(
+                            `Файл найден: ${currentFileName}`
+                        );
+
                         break;
-                    } else {
-                        console.log(`-> Файла ${currentFileName} нет на сервере (Статус: ${response.status})`);
                     }
+
+                    console.log(
+                        `Файл не найден: ${currentFileName}. HTTP ${response.status}`
+                    );
                 } catch (fetchError) {
-                    console.warn(`-> Ошибка сети при запросе ${currentFileName}`);
+                    console.warn(
+                        `Ошибка при проверке ${currentFileName}`,
+                        fetchError
+                    );
                 }
             }
 
-            if (!fileBlob) {
-                throw new Error('На сервере не найден подходящий файл (.eps или .cdr)');
+            /*
+             * Если по каким-то причинам путь selectedFile.path
+             * отличается от ожидаемого, дополнительно пробуем
+             * имя самого выбранного файла.
+             */
+            if (!fileBlob && selectedFile.name) {
+                const selectedNameWithoutExtension =
+                    selectedFile.name.replace(/\.[^/.]+$/, '');
+
+                for (const ext of extensions) {
+                    const currentFileName =
+                        `${selectedNameWithoutExtension}.${ext}`;
+
+                    const currentFileUrl =
+                        `${diskHost}${folderPath ? `/${folderPath}` : ''}/${currentFileName}`;
+
+                    console.log(
+                        `Дополнительно проверяем: ${currentFileUrl}`
+                    );
+
+                    try {
+                        const response = await fetch(currentFileUrl);
+
+                        if (response.ok) {
+                            fileBlob = await response.blob();
+                            finalFileName = currentFileName;
+                            foundExt = ext;
+
+                            console.log(
+                                `Файл найден дополнительной проверкой: ${currentFileName}`
+                            );
+
+                            break;
+                        }
+                    } catch (fetchError) {
+                        console.warn(
+                            `Ошибка при проверке ${currentFileName}`,
+                            fetchError
+                        );
+                    }
+                }
             }
 
-            // 1.1. Если нашли .cdr — сначала конвертируем его в .eps.
+            /*
+             * Если EPS/CDR всё ещё не нашли — ошибка.
+             */
+            if (!fileBlob) {
+                throw new Error(
+                    `Не найден файл для резки: ${baseName}.eps или ${baseName}.cdr`
+                );
+            }
+
+            /*
+             * Если нашли CDR — конвертируем CDR -> EPS.
+             */
             if (foundExt === 'cdr') {
-                console.log(`Файл ${finalFileName} — это .cdr, отправляем на конвертацию в .eps...`);
+                console.log(
+                    `Файл ${finalFileName} — .cdr, конвертируем в .eps...`
+                );
 
                 const cdrFormData = new FormData();
-                cdrFormData.append('file', fileBlob, finalFileName);
 
-                const cdrResponse = await fetch('https://ocleon.333.kg/folder/cdr-to-eps', {
-                    method: 'POST',
-                    body: cdrFormData,
-                    redirect: 'follow'
-                });
+                cdrFormData.append(
+                    'file',
+                    fileBlob,
+                    finalFileName
+                );
+
+                const cdrResponse = await fetch(
+                    'https://ocleon.333.kg/folder/cdr-to-eps',
+                    {
+                        method: 'POST',
+                        body: cdrFormData,
+                        redirect: 'follow'
+                    }
+                );
 
                 if (!cdrResponse.ok) {
-                    throw new Error('Не удалось сконвертировать .cdr файл в .eps на сервере');
+                    throw new Error(
+                        'Не удалось сконвертировать .cdr файл в .eps'
+                    );
                 }
 
                 fileBlob = await cdrResponse.blob();
-                finalFileName = finalFileName.replace(/\.cdr$/i, '.eps');
+
+                finalFileName = finalFileName.replace(
+                    /\.cdr$/i,
+                    '.eps'
+                );
+
                 foundExt = 'eps';
 
-                console.log(`-> .cdr успешно сконвертирован в .eps: ${finalFileName}`);
-                message.success('Файл .cdr успешно сконвертирован в .eps');
+                message.success(
+                    'Файл .cdr успешно сконвертирован в .eps'
+                );
             }
 
-            // 1.2. Если это .eps (изначально или после конвертации из .cdr) — конвертируем в .plt
+            /*
+             * EPS -> PLT
+             */
             if (foundExt === 'eps') {
-                console.log(`Файл ${finalFileName} — это .eps, отправляем на конвертацию в .plt...`);
+                console.log(
+                    `Файл ${finalFileName} — .eps, конвертируем в .plt...`
+                );
 
                 const convertFormData = new FormData();
-                convertFormData.append('file', fileBlob, finalFileName);
 
-                const convertResponse = await fetch('https://ocleon.333.kg/folder/convert', {
-                    method: 'POST',
-                    body: convertFormData,
-                    redirect: 'follow'
-                });
+                convertFormData.append(
+                    'file',
+                    fileBlob,
+                    finalFileName
+                );
+
+                const convertResponse = await fetch(
+                    'https://ocleon.333.kg/folder/convert',
+                    {
+                        method: 'POST',
+                        body: convertFormData,
+                        redirect: 'follow'
+                    }
+                );
 
                 if (!convertResponse.ok) {
-                    throw new Error('Не удалось сконвертировать .eps файл на сервере');
+                    throw new Error(
+                        'Не удалось сконвертировать .eps файл в .plt'
+                    );
                 }
 
                 fileBlob = await convertResponse.blob();
-                finalFileName = finalFileName.replace(/\.eps$/i, '.plt');
+
+                finalFileName = finalFileName.replace(
+                    /\.eps$/i,
+                    '.plt'
+                );
+
                 foundExt = 'plt';
 
-                console.log(`-> Конвертация выполнена, итоговый файл: ${finalFileName}`);
-                message.success('Файл .eps успешно сконвертирован в .plt');
+                message.success(
+                    'Файл .eps успешно сконвертирован в .plt'
+                );
             }
 
-            // 2. Формируем FormData с итоговым .plt файлом
+            /*
+             * PLT отправляем на локальный станок.
+             */
             const formdata = new FormData();
-            formdata.append("file", fileBlob, finalFileName);
 
-            // 3. Отправляем на локальный станок
-            const localResponse = await fetch("http://localhost:5000/cut", {
-                method: "POST",
-                body: formdata,
-                redirect: "follow"
-            });
+            formdata.append(
+                'file',
+                fileBlob,
+                finalFileName
+            );
 
-            if (!localResponse.ok) throw new Error('Локальный станок отклонил файл резки');
+            const localResponse = await fetch(
+                'http://localhost:5000/cut',
+                {
+                    method: 'POST',
+                    body: formdata,
+                    redirect: 'follow'
+                }
+            );
 
-            message.success(`Задание "${finalFileName}" успешно отправлено на станок!`);
+            if (!localResponse.ok) {
+                throw new Error(
+                    'Локальный станок отклонил файл резки'
+                );
+            }
 
+            message.success(
+                `Задание "${finalFileName}" успешно отправлено на станок!`
+            );
+
+            /*
+             * Создаём накладную в CRM.
+             */
             try {
-                await createOrder({ fileId: selectedFile.id }).unwrap();
-                message.success('Накладная зарегистрирована в CRM');
+                await createOrder({
+                    fileId: selectedFile.id
+                }).unwrap();
+
+                message.success(
+                    'Накладная зарегистрирована в CRM'
+                );
             } catch (orderError) {
                 console.error(orderError);
+
                 message.error(
-                    orderError?.data?.message || 'Резка отправлена на станок, но не удалось создать накладную в CRM'
+                    orderError?.data?.message ||
+                    'Резка отправлена на станок, но не удалось создать накладную в CRM'
                 );
             }
 
         } catch (error) {
             console.error(error);
-            message.error(error?.data?.message || error.message || 'Ошибка при мгновенном запуске резки');
+
+            message.error(
+                error?.data?.message ||
+                error.message ||
+                'Ошибка при мгновенном запуске резки'
+            );
         } finally {
             setIsCuttingLoading(false);
         }
@@ -735,8 +916,18 @@ export default function FolderManager() {
                                                         block
                                                         icon={<EditOutlined />}
                                                         onClick={() => {
-                                                            setRenameTarget({ type: 'file', id: selectedFile.id, name: selectedFile.name });
-                                                            renameForm.setFieldsValue({ newName: selectedFile.name });
+                                                            const fileNameWithoutExtension = selectedFile.name.replace(/\.[^/.]+$/, '');
+
+                                                            setRenameTarget({
+                                                                type: 'file',
+                                                                id: selectedFile.id,
+                                                                name: selectedFile.name,
+                                                                extension: selectedFile.name.match(/\.[^/.]+$/)?.[0] || ''
+                                                            });
+
+                                                            renameForm.setFieldsValue({
+                                                                newName: fileNameWithoutExtension
+                                                            });
                                                         }}
                                                     >
                                                         Переименовать файл
