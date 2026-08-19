@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Layout, Breadcrumb, Input, Button, Card, Row, Col,
     Modal, Form, message, Spin, Empty, Tooltip, Space, Upload, Popconfirm, Select
@@ -247,10 +247,101 @@ export default function FolderManager() {
 
     const selectedFileSrc = useMemo(() => {
         if (!selectedFile) return '';
+
         const host = 'https://ocleon.333.kg';
         const folderPath = selectedFile.path ? `/${selectedFile.path}` : '';
+
         return `${host}${folderPath}`;
     }, [selectedFile]);
+
+    const [previewSrc, setPreviewSrc] = useState('');
+
+    useEffect(() => {
+        if (!selectedFileSrc) {
+            setPreviewSrc('');
+            return;
+        }
+
+        let objectUrl = null;
+        let cancelled = false;
+
+        const loadPreview = async () => {
+            try {
+                const response = await fetch(selectedFileSrc);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const svgText = await response.text();
+
+                if (!svgText.includes('<svg')) {
+                    setPreviewSrc(selectedFileSrc);
+                    return;
+                }
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(svgText, 'image/svg+xml');
+
+                const svg = doc.documentElement;
+
+                // Находим все path
+                const paths = svg.querySelectorAll('path');
+
+                paths.forEach((path) => {
+                    const style = path.getAttribute('style') || '';
+
+                    // Получаем текущую толщину
+                    const match = style.match(/stroke-width\s*:\s*([0-9.]+)/);
+
+                    if (!match) return;
+
+                    const width = Number(match[1]);
+
+                    // Только очень тонкие линии делаем толще
+                    if (width < 1) {
+                        path.setAttribute(
+                            'style',
+                            style.replace(
+                                /stroke-width\s*:\s*[0-9.]+/,
+                                'stroke-width:8'
+                            )
+                        );
+                    }
+                });
+
+                const serializer = new XMLSerializer();
+                const modifiedSvg = serializer.serializeToString(doc);
+
+                const blob = new Blob(
+                    [modifiedSvg],
+                    { type: 'image/svg+xml' }
+                );
+
+                objectUrl = URL.createObjectURL(blob);
+
+                if (!cancelled) {
+                    setPreviewSrc(objectUrl);
+                }
+            } catch (error) {
+                console.error('Ошибка подготовки SVG превью:', error);
+
+                if (!cancelled) {
+                    setPreviewSrc(selectedFileSrc);
+                }
+            }
+        };
+
+        loadPreview();
+
+        return () => {
+            cancelled = true;
+
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [selectedFileSrc]);
 
     const handleJustCut = async () => {
         if (!selectedFile) return;
@@ -611,12 +702,18 @@ export default function FolderManager() {
                                                 background: '#fff', borderRadius: '8px', border: '1px solid #f0f0f0', padding: '16px', marginBottom: '16px', overflow: 'hidden'
                                             }}>
                                                 <img
-                                                    src={selectedFileSrc}
+                                                    src={previewSrc}
                                                     alt={selectedFile.name}
-                                                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                                                    style={{
+                                                        maxWidth: '100%',
+                                                        maxHeight: '100%',
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'contain'
+                                                    }}
                                                     onError={(e) => {
                                                         message.error('Ошибка загрузки превью SVG.');
-                                                        e.target.style.display = 'none';
+                                                        e.currentTarget.style.display = 'none';
                                                     }}
                                                 />
                                             </div>
