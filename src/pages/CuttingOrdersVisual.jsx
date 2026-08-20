@@ -74,7 +74,7 @@ const RULE_LABEL = {
 	SECOND_WRAPPING: "Вторая оклейка",
 	REFERRAL: "Привёл друга",
 	SECOND_DEVICE: "Второе устройство",
-	MANUAL: "Ручная",
+	MANUAL: "Другая",
 };
 
 function useIsMobile(breakpoint = 768) {
@@ -656,7 +656,7 @@ export default function CuttingOrdersPage() {
 		clientPhone,
 		clientEmail: clientEmail || undefined,
 		materialId: selectedMaterial?.id,
-		discountId: selectedDiscount.id, 
+		discountId: selectedDiscount.id,
 		...(manualSumma || selectedDiscount?.type === "PRICE_OVERRIDE" ? { summa } : {}),
 	});
 

@@ -50,7 +50,7 @@ const RULE_LABEL = {
   SECOND_WRAPPING: 'Вторая оклейка',
   REFERRAL: 'Привёл друга',
   SECOND_DEVICE: 'Второе устройство',
-  MANUAL: 'Ручная',
+  MANUAL: 'Другая',
 };
 
 const canUseWarranty = (record) => {

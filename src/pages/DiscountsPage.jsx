@@ -45,14 +45,14 @@ const { RangePicker } = DatePicker;
 // ------- константы -------
 const DISCOUNT_TYPE_LABELS = {
   PERCENTAGE: { label: 'Процент', color: 'blue', icon: <PercentageOutlined /> },
-  FIXED:      { label: 'Фикс. сумма', color: 'green', icon: <DollarOutlined /> },
+  FIXED: { label: 'Фикс. сумма', color: 'green', icon: <DollarOutlined /> },
 };
 
 const DISCOUNT_RULE_LABELS = {
   SECOND_WRAPPING: { label: 'Вторая оклейка', color: 'purple' },
-  REFERRAL:        { label: 'Реферал',         color: 'orange' },
-  SECOND_DEVICE:   { label: 'Второе устройство', color: 'cyan' },
-  MANUAL:          { label: 'Ручная',           color: 'default' },
+  REFERRAL: { label: 'Реферал', color: 'orange' },
+  SECOND_DEVICE: { label: 'Второе устройство', color: 'cyan' },
+  MANUAL: { label: 'Другая', color: 'default' },
 };
 
 const EMPTY_FORM = {
@@ -87,13 +87,13 @@ export default function DiscountsPage() {
   const openEdit = (record) => {
     setEditingDiscount(record);
     form.setFieldsValue({
-      name:        record.name,
-      type:        record.type,
-      value:       record.value,
-      rule:        record.rule ?? 'MANUAL',
+      name: record.name,
+      type: record.type,
+      value: record.value,
+      rule: record.rule ?? 'MANUAL',
       description: record.description ?? '',
-      isActive:    record.isActive,
-      clientId:    record.client?.id,
+      isActive: record.isActive,
+      clientId: record.client?.id,
       dateRange:
         record.startDate && record.endDate
           ? [dayjs(record.startDate), dayjs(record.endDate)]
@@ -111,7 +111,7 @@ export default function DiscountsPage() {
       const payload = {
         ...rest,
         startDate: dateRange?.[0]?.toISOString() ?? undefined,
-        endDate:   dateRange?.[1]?.toISOString() ?? undefined,
+        endDate: dateRange?.[1]?.toISOString() ?? undefined,
       };
 
       if (editingDiscount) {
@@ -260,7 +260,7 @@ export default function DiscountsPage() {
   ];
 
   // ------- статистика -------
-  const activeCount   = discounts.filter((d) => d.isActive).length;
+  const activeCount = discounts.filter((d) => d.isActive).length;
   const inactiveCount = discounts.length - activeCount;
 
   return (
@@ -405,7 +405,7 @@ export default function DiscountsPage() {
           {/* Правило (rule) */}
           <Form.Item name="rule" label="Правило (автоматическое применение)">
             <Select allowClear placeholder="Без правила (ручной выбор)">
-              <Option value="MANUAL">Ручная (без автоправила)</Option>
+              <Option value="MANUAL">Другая (без автоправила)</Option>
               <Option value="SECOND_WRAPPING">Вторая оклейка</Option>
               <Option value="REFERRAL">Реферальная программа</Option>
               <Option value="SECOND_DEVICE">Второе устройство</Option>
