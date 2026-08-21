@@ -671,7 +671,7 @@ export default function FolderManager() {
             <Content style={{ maxWidth: '1900px', width: 'calc(100% - 24px)', margin: '0 auto' }}>
 
                 {/* ТУЛБАР */}
-                <Row gutter={[16, 16]} justify="space-between" align="middle" style={{ marginBottom: '20px' }}>
+                <Row gutter={[16, 16]} justify="space-between" align="middle" style={{ marginBottom: '12px' }}>
                     <Col xs={24} sm={12} md={8}>
                         <Input
                             placeholder="Поиск папок и файлов..."
@@ -727,7 +727,7 @@ export default function FolderManager() {
 
                 {/* ХЛЕБНЫЕ КРОШКИ */}
                 {!searchQuery && (
-                    <Breadcrumb style={{ marginBottom: '20px', fontSize: '14px' }}>
+                    <Breadcrumb style={{ marginBottom: '8px', fontSize: '14px' }}>
                         {history.map((item, index) => (
                             <Breadcrumb.Item
                                 key={index}
@@ -778,7 +778,7 @@ export default function FolderManager() {
                         ) : (
                             <Row gutter={[24, 24]}>
                                 {/* СЕТКА ЭЛЕМЕНТОВ */}
-                                <Col xs={24} lg={selectedFile ? 16 : 24} style={{ transition: 'all 0.3s' }}>
+                                <Col xs={24} lg={selectedFile ? 16 : 24} style={{ transition: 'all 0.3s', maxHeight: "calc( 100vh - 160px)", overflow: "auto" }}>
                                     {/* ПАПКИ */}
                                     {visibleFolders.length > 0 && (
                                         <div style={{ marginBottom: '24px' }}>
